@@ -16,12 +16,12 @@ func BuildCompletions(linePrefix string, table *SymbolTable, db *TLBDatabase, sc
 	}
 	varName := m[1]
 
-	sym := table.FindByName(varName, scope)
-	if sym == nil || sym.TypeName == "" {
+	typeName := resolveChainType(varName, table, db, scope)
+	if typeName == "" {
 		return nil
 	}
 
-	members := db.Members(sym.TypeName)
+	members := db.Members(typeName)
 	items := make([]CompletionItem, 0, len(members))
 	for _, mem := range members {
 		sig := mem.Signature()
@@ -36,6 +36,25 @@ func BuildCompletions(linePrefix string, table *SymbolTable, db *TLBDatabase, sc
 		})
 	}
 	return items
+}
+
+// resolveChainType は "oDoc" や "CATIA.ActiveDocument" のような式の最終型名を返す。
+func resolveChainType(expr string, table *SymbolTable, db *TLBDatabase, scope string) string {
+	parts := strings.Split(expr, ".")
+	// 最初のトークンをシンボルテーブルで解決
+	sym := table.FindByName(parts[0], scope)
+	if sym == nil || sym.TypeName == "" {
+		return ""
+	}
+	current := sym.TypeName
+	// 残りのトークンを DB でチェーン解決
+	for _, part := range parts[1:] {
+		current = db.GetReturnType(current, part)
+		if current == "" {
+			return ""
+		}
+	}
+	return current
 }
 
 // ResolveHoverMarkdown はホバー対象のシンボル情報を Markdown 文字列で返す。

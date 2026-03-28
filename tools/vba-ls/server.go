@@ -143,6 +143,10 @@ func (h *lspHandler) handleCompletion(ctx context.Context, conn *jsonrpc2.Conn, 
 		_ = conn.Reply(ctx, req.ID, nil)
 		return
 	}
+	if h.db == nil {
+		_ = conn.Reply(ctx, req.ID, nil)
+		return
+	}
 	linePrefix := lineAt(content, int(p.Position.Line), int(p.Position.Character))
 	scope := scopeAtLine(content, int(p.Position.Line))
 	items := BuildCompletions(linePrefix, table, h.db, scope)
@@ -163,6 +167,10 @@ func (h *lspHandler) handleHover(ctx context.Context, conn *jsonrpc2.Conn, req *
 	}
 	table := h.getTable(uri)
 	if table == nil {
+		_ = conn.Reply(ctx, req.ID, nil)
+		return
+	}
+	if h.db == nil {
 		_ = conn.Reply(ctx, req.ID, nil)
 		return
 	}
@@ -193,7 +201,7 @@ func (h *lspHandler) getTable(uri string) *SymbolTable {
 
 func (h *lspHandler) publishDiagnostics(ctx context.Context, conn *jsonrpc2.Conn, uri, content string) {
 	table := h.getTable(uri)
-	if table == nil {
+	if table == nil || h.db == nil {
 		return
 	}
 	diags := BuildDiagnostics(content, table, h.db)

@@ -52,14 +52,7 @@ func BuildDiagnostics(src string, table *SymbolTable, db *TLBDatabase) []Diagnos
 }
 
 func hasMember(db *TLBDatabase, typeName, memberName string) bool {
-	members := db.Members(typeName)
-	lname := strings.ToLower(memberName)
-	for _, m := range members {
-		if strings.ToLower(m.Name) == lname {
-			return true
-		}
-	}
-	return false
+	return db.HasMember(typeName, memberName)
 }
 
 // stripCommentAndStrings はコメント（'）と文字列リテラルを空白で置換する。

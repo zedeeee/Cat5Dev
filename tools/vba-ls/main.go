@@ -40,26 +40,28 @@ func loadDB() *TLBDatabase {
 		}
 		fmt.Fprintf(os.Stderr, "vba-ls: TLBデータベース読み込みエラー: %v\n", err)
 	}
-	fmt.Fprintf(os.Stderr, "vba-ls: catia_types.json が見つかりません。補完は無効です。\n")
-	return &TLBDatabase{
-		types: make(map[string]TLBType),
-		raw:   make(map[string]string),
-	}
+	fmt.Fprintf(os.Stderr, "vba-ls: catia_api.db が見つかりません。補完は無効です。\n")
+	fmt.Fprintf(os.Stderr, "  tools/tlb-extractor/ で uv run python extract.py を実行してください。\n")
+	return nil
 }
 
 func findTLBDatabase() string {
-	if p := os.Getenv("CAT5DEV_TLB_JSON"); p != "" {
+	if p := os.Getenv("CAT5DEV_TLB_DB"); p != "" {
 		return p
 	}
 	exe, err := os.Executable()
 	if err != nil {
 		return ""
 	}
-	candidate := filepath.Join(filepath.Dir(exe), "catia_types.json")
-	if _, err := os.Stat(candidate); err == nil {
-		return candidate
+	// bin/ と同じディレクトリ
+	for _, name := range []string{"catia_api.db", "catia_types.db"} {
+		candidate := filepath.Join(filepath.Dir(exe), name)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
 	}
-	dev := filepath.Join(filepath.Dir(exe), "..", "..", "tools", "tlb-extractor", "catia_types.json")
+	// 開発時: tools/tlb-extractor/catia_api.db
+	dev := filepath.Join(filepath.Dir(exe), "..", "..", "tools", "tlb-extractor", "catia_api.db")
 	if _, err := os.Stat(dev); err == nil {
 		return dev
 	}
