@@ -42,10 +42,31 @@ type CompletionOptions struct {
 	TriggerCharacters []string `json:"triggerCharacters,omitempty"`
 }
 
+type SemanticTokensLegend struct {
+	TokenTypes     []string `json:"tokenTypes"`
+	TokenModifiers []string `json:"tokenModifiers"`
+}
+
+type SemanticTokensOptions struct {
+	Legend SemanticTokensLegend `json:"legend"`
+	Full   bool                 `json:"full"`
+}
+
 type ServerCapabilities struct {
-	TextDocumentSync   TextDocumentSyncKind `json:"textDocumentSync"`
-	CompletionProvider *CompletionOptions   `json:"completionProvider,omitempty"`
-	HoverProvider      bool                 `json:"hoverProvider,omitempty"`
+	TextDocumentSync        TextDocumentSyncKind   `json:"textDocumentSync"`
+	CompletionProvider      *CompletionOptions     `json:"completionProvider,omitempty"`
+	HoverProvider           bool                   `json:"hoverProvider,omitempty"`
+	SemanticTokensProvider  *SemanticTokensOptions `json:"semanticTokensProvider,omitempty"`
+}
+
+// --- Semantic Tokens ---
+
+type SemanticTokensParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+}
+
+type SemanticTokens struct {
+	Data []uint32 `json:"data"`
 }
 
 type ServerInfo struct {

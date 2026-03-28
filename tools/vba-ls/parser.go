@@ -61,24 +61,31 @@ func (l *symbolListener) EnterVariableDcl(ctx *vbaantlr.VariableDclContext) {
 	// TypedVariableDcl: Dim x%  (型接尾辞付き) — 初期実装では無視
 	// UntypedVariableDcl: Dim x As TypeName
 	if u := ctx.UntypedVariableDcl(); u != nil {
-		name := u.AmbiguousIdentifier().GetText()
+		ident := u.AmbiguousIdentifier()
+		name := ident.GetText()
 		typeName := ""
+		typeNameLine := 0
+		typeNameCol := 0
 		if ac := u.AsClause(); ac != nil {
 			if at := ac.AsType(); at != nil {
 				if ts := at.TypeSpec(); ts != nil {
 					if te := ts.TypeExpression(); te != nil {
 						typeName = strings.TrimSpace(te.GetText())
+						typeNameLine = te.GetStart().GetLine() - 1
+						typeNameCol = te.GetStart().GetColumn()
 					}
 				}
 			}
 		}
 		if name != "" {
 			l.table.Symbols = append(l.table.Symbols, Symbol{
-				Name:     name,
-				TypeName: typeName,
-				Scope:    l.scope,
-				Line:     ctx.GetStart().GetLine() - 1,
-				Col:      ctx.GetStart().GetColumn(),
+				Name:         name,
+				TypeName:     typeName,
+				Scope:        l.scope,
+				Line:         ident.GetStart().GetLine() - 1,
+				Col:          ident.GetStart().GetColumn(),
+				TypeNameLine: typeNameLine,
+				TypeNameCol:  typeNameCol,
 			})
 		}
 	}

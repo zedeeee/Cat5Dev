@@ -130,6 +130,15 @@
                 "title": "CATIA: Initialize Project (cat5dev.toml)"
             }
         ],
+        "semanticTokenScopes": [
+            {
+                "language": "vb",
+                "scopes": {
+                    "type": ["entity.name.type", "support.class"],
+                    "variable": ["variable.other"]
+                }
+            }
+        ],
         "configuration": [
             {
                 "title": "CATIA V5 VBA",

@@ -73,6 +73,8 @@ func (h *lspHandler) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 		h.handleCompletion(ctx, conn, req)
 	case "textDocument/hover":
 		h.handleHover(ctx, conn, req)
+	case "textDocument/semanticTokens/full":
+		h.handleSemanticTokens(ctx, conn, req)
 	}
 }
 
@@ -84,6 +86,13 @@ func (h *lspHandler) handleInitialize(ctx context.Context, conn *jsonrpc2.Conn, 
 				TriggerCharacters: []string{"."},
 			},
 			HoverProvider: true,
+			SemanticTokensProvider: &SemanticTokensOptions{
+				Legend: SemanticTokensLegend{
+					TokenTypes:     []string{"type", "variable"},
+					TokenModifiers: []string{"declaration"},
+				},
+				Full: true,
+			},
 		},
 		ServerInfo: &ServerInfo{Name: serverName, Version: serverVersion},
 	}
@@ -184,6 +193,23 @@ func (h *lspHandler) handleHover(ctx context.Context, conn *jsonrpc2.Conn, req *
 	_ = conn.Reply(ctx, req.ID, Hover{
 		Contents: MarkupContent{Kind: "markdown", Value: md},
 	})
+}
+
+func (h *lspHandler) handleSemanticTokens(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
+	var p SemanticTokensParams
+	if err := json.Unmarshal(*req.Params, &p); err != nil {
+		_ = conn.Reply(ctx, req.ID, SemanticTokens{Data: []uint32{}})
+		return
+	}
+	uri := p.TextDocument.URI
+	content, ok := h.store.get(uri)
+	if !ok {
+		_ = conn.Reply(ctx, req.ID, SemanticTokens{Data: []uint32{}})
+		return
+	}
+	table := h.getTable(uri)
+	data := BuildSemanticTokens(content, table, h.db)
+	_ = conn.Reply(ctx, req.ID, SemanticTokens{Data: data})
 }
 
 func (h *lspHandler) reparse(uri, content string) {

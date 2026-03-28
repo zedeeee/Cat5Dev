@@ -4,11 +4,13 @@ import "strings"
 
 // Symbol は VBA コード内の変数宣言情報を表す。
 type Symbol struct {
-	Name     string // 変数名
-	TypeName string // 型名（"PartDocument" 等）
-	Scope    string // "module" または "Sub:FooSub" / "Function:Bar" 等
-	Line     int    // 0-based 行番号
-	Col      int    // 0-based 列番号
+	Name         string // 変数名
+	TypeName     string // 型名（"PartDocument" 等）
+	Scope        string // "module" または "Sub:FooSub" / "Function:Bar" 等
+	Line         int    // 0-based 行番号（変数名の位置）
+	Col          int    // 0-based 列番号（変数名の位置）
+	TypeNameLine int    // 0-based 行番号（型名の位置）
+	TypeNameCol  int    // 0-based 列番号（型名の位置）
 }
 
 // SymbolTable はファイル単位のシンボルテーブル。
