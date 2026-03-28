@@ -15,12 +15,7 @@ func main() {
 	handler := newLSPHandler(db)
 	codec := jsonrpc2.VSCodeObjectCodec{}
 	stream := jsonrpc2.NewBufferedStream(stdinStdout{}, codec)
-	conn := jsonrpc2.NewConn(context.Background(), stream, jsonrpc2.HandlerWithError(
-		func(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) (interface{}, error) {
-			handler.Handle(ctx, conn, req)
-			return nil, nil
-		},
-	))
+	conn := jsonrpc2.NewConn(context.Background(), stream, handler)
 	<-conn.DisconnectNotify()
 }
 
