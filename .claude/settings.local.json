@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go get:*)",
+      "Bash(npm install:*)",
+      "Bash(ls /c/nori/Cat5Dev/tools/vba-ls/*.go /c/nori/Cat5Dev/tools/tlb-extractor/ /c/nori/Cat5Dev/src/lsp*)",
+      "Bash(uv --version)",
+      "Bash(uv sync:*)",
+      "Bash(uv run:*)",
+      "Bash(VIRTUAL_ENV=\"\" uv run --project /c/nori/Cat5Dev/tools/tlb-extractor /c/nori/Cat5Dev/tools/tlb-extractor/extract.py --list)",
+      "Bash(VIRTUAL_ENV=\"\" /c/nori/Cat5Dev/tools/tlb-extractor/.venv/Scripts/python.exe -c \"import comtypes; print\\(''ok''\\)\")",
+      "Bash(VIRTUAL_ENV=\"\" uv run python extract.py --list)",
+      "Bash(VIRTUAL_ENV=\"\" uv run --directory /c/nori/Cat5Dev/tools/tlb-extractor python /c/nori/Cat5Dev/tools/tlb-extractor/extract.py --list)"
+    ]
+  }
+}

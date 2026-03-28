@@ -11,6 +11,7 @@ import { VbaServer } from './vbaServer';
 import { t, getLanguage, setLanguage } from './i18n';
 import { registerLinter } from './linter';
 import { tomlTemplate } from './lintConfig';
+import { startLspClient } from './lspClient';
 
 const outputChannel = vscode.window.createOutputChannel('CATIA VBA Sync');
 
@@ -142,6 +143,9 @@ export function activate(context: vscode.ExtensionContext) {
     // Linter 登録
     const linterDisposables = registerLinter(vbaServer, outputChannel, VBA_SELECTOR);
     context.subscriptions.push(...linterDisposables);
+
+    // VBA Language Server（補完・ホバー・診断）を起動
+    startLspClient(context);
 
     // cat5dev.init コマンド
     const initCmd = vscode.commands.registerCommand('cat5dev.init', async () => {
