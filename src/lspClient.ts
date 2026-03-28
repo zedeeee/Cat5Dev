@@ -37,8 +37,8 @@ export function startLspClient(context: vscode.ExtensionContext): void {
     }
 
     const serverOptions: ServerOptions = {
-        command: serverExe,
-        transport: TransportKind.stdio,
+        run:   { command: serverExe, transport: TransportKind.stdio },
+        debug: { command: serverExe, transport: TransportKind.stdio },
     };
 
     const clientOptions: LanguageClientOptions = {
