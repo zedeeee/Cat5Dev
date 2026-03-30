@@ -31,6 +31,7 @@ function flushCatScriptErrors(tempDir: string): void {
 }
 
 export function activate(context: vscode.ExtensionContext) {
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
     const vbaServer = new VbaServer(context, outputChannel);
     context.subscriptions.push(vbaServer);
     vbaServer.start();
@@ -101,10 +102,10 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.languages.registerDocumentSymbolProvider(VBA_SELECTOR, new VbaDocumentSymbolProvider())
     );
     context.subscriptions.push(
-        vscode.languages.registerDocumentFormattingEditProvider(VBA_SELECTOR, new VbaDocumentFormatter(vbaServer, outputChannel))
+        vscode.languages.registerDocumentFormattingEditProvider(VBA_SELECTOR, new VbaDocumentFormatter(vbaServer, outputChannel, workspaceRoot))
     );
     context.subscriptions.push(
-        registerFormatOnSave(vbaServer, outputChannel, VBA_SELECTOR)
+        registerFormatOnSave(vbaServer, outputChannel, VBA_SELECTOR, workspaceRoot)
     );
 
     const treeProvider = new CatiaVbaTreeProvider(context);
@@ -504,7 +505,7 @@ sys.ExecuteScript "${tempDir}", 1, "c5d_pull.catvbs", "CATMain", args
                         const fmtConfig = vscode.workspace.getConfiguration('cat5dev.formatter');
                         let saveContent = normalized;
                         if (fmtConfig.get<boolean>('formatOnPull', false)) {
-                            const formatted = await formatVbaDocument(normalized, vbaServer, outputChannel);
+                            const formatted = await formatVbaDocument(normalized, vbaServer, outputChannel, rootPath);
                             if (formatted !== null) {
                                 saveContent = formatted;
                             }

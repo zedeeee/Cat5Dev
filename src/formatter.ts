@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { VbaServer, httpPost } from './vbaServer';
+import { readFormatterOptions } from './lintConfig';
 
 const FORMATTER_TIMEOUT_MS = 10000;
 
@@ -7,7 +8,8 @@ const FORMATTER_TIMEOUT_MS = 10000;
 export async function formatVbaDocument(
     text: string,
     server: VbaServer,
-    outputChannel: vscode.OutputChannel
+    outputChannel: vscode.OutputChannel,
+    workspaceRoot: string
 ): Promise<string | null> {
     const baseUrl = server.getBaseUrl();
     if (baseUrl === null) {
@@ -15,23 +17,23 @@ export async function formatVbaDocument(
         return null;
     }
 
-    const config = vscode.workspace.getConfiguration('cat5dev.formatter');
+    const opts = readFormatterOptions(workspaceRoot);
 
     const requestBody = JSON.stringify({
         code: text,
         options: {
-            indent_size: config.get<number>('indentSize', 4),
-            capitalize_keywords: config.get<boolean>('capitalizeKeywords', true),
-            fix_indentation: config.get<boolean>('fixIndentation', true),
+            indent_size: opts.indent_size,
+            capitalize_keywords: opts.capitalize_keywords,
+            fix_indentation: opts.fix_indentation,
             line_endings: 'CRLF',
-            trim_trailing_space: config.get<boolean>('trimTrailingSpace', true),
-            ensure_continuation_space: config.get<boolean>('ensureContinuationSpace', true),
-            indent_continuation_lines: config.get<boolean>('indentContinuationLines', true),
-            max_blank_lines: config.get<number>('maxBlankLines', 2),
-            normalize_operator_spacing: config.get<boolean>('normalizeOperatorSpacing', false),
-            normalize_comma_spacing: config.get<boolean>('normalizeCommaSpacing', false),
-            normalize_comment_space: config.get<boolean>('normalizeCommentSpace', false),
-            expand_type_suffixes: config.get<boolean>('expandTypeSuffixes', false),
+            trim_trailing_space: opts.trim_trailing_space,
+            ensure_continuation_space: opts.ensure_continuation_space,
+            indent_continuation_lines: opts.indent_continuation_lines,
+            max_blank_lines: opts.max_blank_lines,
+            normalize_operator_spacing: opts.normalize_operator_spacing,
+            normalize_comma_spacing: opts.normalize_comma_spacing,
+            normalize_comment_space: opts.normalize_comment_space,
+            expand_type_suffixes: opts.expand_type_suffixes,
             split_colon_statements: false,
             normalize_then_placement: false,
             normalize_on_error: false,
@@ -56,7 +58,8 @@ export async function formatVbaDocument(
 export class VbaDocumentFormatter implements vscode.DocumentFormattingEditProvider {
     constructor(
         private readonly server: VbaServer,
-        private readonly outputChannel: vscode.OutputChannel
+        private readonly outputChannel: vscode.OutputChannel,
+        private readonly workspaceRoot: string
     ) {}
 
     async provideDocumentFormattingEdits(
@@ -67,7 +70,8 @@ export class VbaDocumentFormatter implements vscode.DocumentFormattingEditProvid
         const formatted = await formatVbaDocument(
             document.getText(),
             this.server,
-            this.outputChannel
+            this.outputChannel,
+            this.workspaceRoot
         );
         if (formatted === null) {
             return [];
@@ -84,11 +88,12 @@ export class VbaDocumentFormatter implements vscode.DocumentFormattingEditProvid
 export function registerFormatOnSave(
     server: VbaServer,
     outputChannel: vscode.OutputChannel,
-    selector: vscode.DocumentSelector
+    selector: vscode.DocumentSelector,
+    workspaceRoot: string
 ): vscode.Disposable {
     return vscode.workspace.onWillSaveTextDocument((event) => {
-        const config = vscode.workspace.getConfiguration('cat5dev.formatter');
-        if (!config.get<boolean>('formatOnSave', false)) {
+        const opts = readFormatterOptions(workspaceRoot);
+        if (!opts.format_on_save) {
             return;
         }
 
@@ -99,7 +104,8 @@ export function registerFormatOnSave(
         const formatPromise = formatVbaDocument(
             event.document.getText(),
             server,
-            outputChannel
+            outputChannel,
+            workspaceRoot
         ).then((formatted) => {
             if (formatted === null) {
                 return [];
