@@ -16,18 +16,20 @@ import { startLspClient } from './lspClient';
 const outputChannel = vscode.window.createOutputChannel('CATIA VBA Sync');
 
 
-/** CATScriptのエラーログファイルを読み込み、OutputChannelに出力する */
-function flushCatScriptErrors(tempDir: string): void {
+/** CATScriptのログファイルを読み込み、OutputChannelに出力する。エラーがあればtrueを返す */
+function flushCatScriptErrors(tempDir: string): boolean {
     const errLogPath = path.join(tempDir, 'c5d_err.log');
-    if (!fs.existsSync(errLogPath)) { return; }
+    if (!fs.existsSync(errLogPath)) { return false; }
+    let hasErrors = false;
     try {
         const content = fs.readFileSync(errLogPath, 'utf-8').trim();
         if (content) {
-            outputChannel.appendLine(`[CATScript Errors]\n${content}`);
-            outputChannel.show(true);
+            outputChannel.appendLine(`[CATScript Log]\n${content}`);
+            hasErrors = /\[Push\.(Fatal|Add|DeleteLines|AddFromString)\]/.test(content);
         }
     } catch (e) { }
     try { fs.unlinkSync(errLogPath); } catch (e) { }
+    return hasErrors;
 }
 
 export function activate(context: vscode.ExtensionContext) {
@@ -603,11 +605,6 @@ async function executeCatiaPush(context: vscode.ExtensionContext) {
         }
     }
 
-    if (count === 0 && skippedCount > 0) {
-        vscode.window.showInformationMessage(t('info.noChanges', String(skippedCount)));
-        return;
-    }
-
     if (count === 0) {
         vscode.window.showInformationMessage(t('error.noModuleFiles'));
         return;
@@ -757,6 +754,11 @@ ag_sys.ExecuteScript "${tempDir}", 1, "c5d_check.catvbs", "CATMain", ag_args
         if (f.endsWith('_REMOTE.txt')) { fs.unlinkSync(path.join(tempDir, f)); }
     }
 
+    if (count === 0) {
+        vscode.window.showInformationMessage(t('info.noChanges', String(skippedCount)));
+        return;
+    }
+
     // 3. Prompt user if there are files in CATIA missing locally
     const toDelete = remoteCompNames.filter(r => !localCompNames.includes(r));
     let performDelete = false;
@@ -810,18 +812,30 @@ Sub CATMain()
     On Error Resume Next
     Dim fso, apc, vbe, i, j, proj, comp, codeMod, inPath, inStr, newContent, devProj
     Dim targetProjName, folder, fileItem, parts, compName, compType
-    Dim errPath, ef
+    Dim errPath, donePath, ef
+    Dim logCount, errCount
 
     targetProjName = "${targetProject}"
 
     Set fso = CreateObject("Scripting.FileSystemObject")
     errPath = "${tempDir}\\c5d_err.log"
+    donePath = "${tempDir}\\c5d_push_done.txt"
+    logCount = 0
+    errCount = 0
+
+    Set ef = fso.OpenTextFile(errPath, 8, True)
+    ef.WriteLine "[Push.Start] target=" & targetProjName & " time=" & Now
+    ef.Close
 
     Set apc = CreateObject("MSAPC.Apc.7.1")
     If apc Is Nothing Then Set apc = CreateObject("MSAPC.Apc")
     Set vbe = apc.VBE
 
     If Err.Number <> 0 Then
+        Set ef = fso.OpenTextFile(errPath, 8, True)
+        ef.WriteLine "[Push.Fatal] VBE取得失敗 Err=" & Err.Number & ": " & Err.Description
+        ef.Close
+        Set ef = fso.OpenTextFile(donePath, 2, True) : ef.WriteLine "error" : ef.Close
         Exit Sub
     End If
 
@@ -834,7 +848,13 @@ Sub CATMain()
         End If
     Next
 
-    If devProj Is Nothing Then Exit Sub
+    If devProj Is Nothing Then
+        Set ef = fso.OpenTextFile(errPath, 8, True)
+        ef.WriteLine "[Push.Fatal] プロジェクト '" & targetProjName & "' が見つかりません"
+        ef.Close
+        Set ef = fso.OpenTextFile(donePath, 2, True) : ef.WriteLine "error" : ef.Close
+        Exit Sub
+    End If
 
     ' Perform Deletions
     If fso.FileExists("${tempDir}\\delete_list.txt") Then
@@ -865,7 +885,12 @@ Sub CATMain()
                         Set ef = fso.OpenTextFile(errPath, 8, True)
                         ef.WriteLine "[Push.Delete] Remove '" & Trim(d) & "' Err=" & Err.Number & ": " & Err.Description
                         ef.Close
+                        errCount = errCount + 1
                         Err.Clear
+                    Else
+                        Set ef = fso.OpenTextFile(errPath, 8, True)
+                        ef.WriteLine "[Push.Delete] Remove '" & Trim(d) & "' -> OK"
+                        ef.Close
                     End If
                     On Error GoTo 0
                 End If
@@ -887,6 +912,10 @@ Sub CATMain()
                 fso.DeleteFile fileItem.Path
             Else
 
+            Set ef = fso.OpenTextFile(errPath, 8, True)
+            ef.WriteLine "[Push.Process] " & compName & " (Type=" & compType & ")"
+            ef.Close
+
             Set comp = Nothing
             For k = 1 To devProj.VBComponents.Count
                 If UCase(devProj.VBComponents.Item(k).Name) = UCase(compName) Then
@@ -902,6 +931,7 @@ Sub CATMain()
                     Set ef = fso.OpenTextFile(errPath, 8, True)
                     ef.WriteLine "[Push.Add] Add '" & compName & "' (Type=" & compType & ") Err=" & Err.Number & ": " & Err.Description
                     ef.Close
+                    errCount = errCount + 1
                     Err.Clear
                 End If
                 On Error GoTo 0
@@ -912,6 +942,7 @@ Sub CATMain()
                 Set ef = fso.OpenTextFile(errPath, 8, True)
                 ef.WriteLine "[Push.Add] Component '" & compName & "' could not be created or found. Skipped."
                 ef.Close
+                errCount = errCount + 1
             Else
                 Set inStr = CreateObject("ADODB.Stream")
                 inStr.Type = 2
@@ -929,6 +960,7 @@ Sub CATMain()
                         Set ef = fso.OpenTextFile(errPath, 8, True)
                         ef.WriteLine "[Push.DeleteLines] '" & compName & "' Err=" & Err.Number & ": " & Err.Description
                         ef.Close
+                        errCount = errCount + 1
                         Err.Clear
                     End If
                 End If
@@ -938,7 +970,10 @@ Sub CATMain()
                     Set ef = fso.OpenTextFile(errPath, 8, True)
                     ef.WriteLine "[Push.AddFromString] '" & compName & "' Err=" & Err.Number & ": " & Err.Description
                     ef.Close
+                    errCount = errCount + 1
                     Err.Clear
+                Else
+                    logCount = logCount + 1
                 End If
                 On Error GoTo 0
             End If
@@ -948,9 +983,22 @@ Sub CATMain()
         End If
     Next
 
+    Set ef = fso.OpenTextFile(errPath, 8, True)
+    ef.WriteLine "[Push.Done] processed=" & logCount & " errors=" & errCount & " time=" & Now
+    ef.Close
+
+    ' 完了フラグ書き込み（VBSポーリング用）
+    Set ef = fso.OpenTextFile(donePath, 2, True)
+    ef.WriteLine "done"
+    ef.Close
+
 End Sub
 `;
     fs.writeFileSync(catScriptPath, catScriptContent, 'utf-8');
+
+    const doneFlagPath = path.join(tempDir, 'c5d_push_done.txt');
+    // 既存の完了フラグがあれば削除しておく
+    if (fs.existsSync(doneFlagPath)) { fs.unlinkSync(doneFlagPath); }
 
     const pushVbsScript = `
 On Error Resume Next
@@ -960,6 +1008,16 @@ If Err.Number <> 0 Then WScript.Quit 1
 Set ag_sys = ag_catia.SystemService
 If Err.Number <> 0 Or ag_sys Is Nothing Then WScript.Quit 1
 ag_sys.ExecuteScript "${tempDir}", 1, "c5d_push.catvbs", "CATMain", ag_args
+' ExecuteScriptは非同期のため、CATScriptが完了フラグを書くまでポーリング待機
+Dim fso2, doneFile, startTime
+Set fso2 = CreateObject("Scripting.FileSystemObject")
+doneFile = "${tempDir}\\c5d_push_done.txt"
+startTime = Now
+Do While Not fso2.FileExists(doneFile)
+    WScript.Sleep 500
+    If DateDiff("s", startTime, Now) > 180 Then Exit Do
+Loop
+If fso2.FileExists(doneFile) Then fso2.DeleteFile doneFile
 `;
     fs.writeFileSync(pushVbsPath, pushVbsScript, 'utf-8');
 
@@ -969,11 +1027,11 @@ ag_sys.ExecuteScript "${tempDir}", 1, "c5d_push.catvbs", "CATMain", ag_args
         cancellable: false
     }, async (progress) => {
         return new Promise<void>((resolve, reject) => {
-            exec(`%SystemRoot%\\SysWOW64\\cscript.exe //nologo "${pushVbsPath}"`, (error, stdout, stderr) => {
+            exec(`%SystemRoot%\\SysWOW64\\cscript.exe //nologo "${pushVbsPath}"`, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
                 if (fs.existsSync(pushVbsPath)) fs.unlinkSync(pushVbsPath);
                 if (fs.existsSync(catScriptPath)) fs.unlinkSync(catScriptPath);
 
-                flushCatScriptErrors(tempDir);
+                const hasErrors = flushCatScriptErrors(tempDir);
 
                 if (error) {
                     outputChannel.appendLine(`[Push Error]`);
@@ -983,6 +1041,9 @@ ag_sys.ExecuteScript "${tempDir}", 1, "c5d_push.catvbs", "CATMain", ag_args
                     outputChannel.show(true);
                     vscode.window.showErrorMessage(t('error.pushFailed'));
                     return reject();
+                }
+                if (hasErrors) {
+                    outputChannel.show(true);
                 }
                 const deleteMsg = performDelete ? '（削除同期を含む）' : '';
                 vscode.window.showInformationMessage(t('info.pushSuccess', String(count), '', deleteMsg));

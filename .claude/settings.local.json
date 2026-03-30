@@ -12,7 +12,8 @@
       "Bash(VIRTUAL_ENV=\"\" uv run python extract.py --list)",
       "Bash(VIRTUAL_ENV=\"\" uv run --directory /c/nori/Cat5Dev/tools/tlb-extractor python /c/nori/Cat5Dev/tools/tlb-extractor/extract.py --list)",
       "Bash(find /c/nori/Cat5Dev/tools -type f -name *.go -o -name *.py -o -name *.md)",
-      "Bash(npx vsce:*)"
+      "Bash(npx vsce:*)",
+      "Bash(node -e \"const os = require\\(''os''\\); console.log\\(os.tmpdir\\(\\)\\);\")"
     ]
   }
 }
