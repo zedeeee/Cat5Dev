@@ -1,0 +1,210 @@
+Sub CATMain()
+    On Error Resume Next
+    Dim fso, apc, vbe, i, j, proj, comp, codeMod, inStr, newContent, devProj
+    Dim targetProjName, folder, fileItem, parts, compName, compType
+    Dim errPath, donePath
+    Dim logCount, errCount
+    Dim logStream
+
+    targetProjName = "{{TARGET_PROJECT}}"
+    errPath = "{{TEMP_DIR}}\c5d_err.log"
+    donePath = "{{TEMP_DIR}}\c5d_push_done.txt"
+    logCount = 0
+    errCount = 0
+
+    ' ログをADODB.Streamで蓄積し、最後にまとめて書き出す
+    Set logStream = CreateObject("ADODB.Stream")
+    logStream.Type = 2
+    logStream.Charset = "utf-8"
+    logStream.Open
+    logStream.WriteText "[Push.Start] target=" & targetProjName & " time=" & Now & vbCrLf
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    logStream.WriteText "[Push.Debug] fso=" & Not (fso Is Nothing) & vbCrLf
+
+    Set apc = CreateObject("MSAPC.Apc.7.1")
+    logStream.WriteText "[Push.Debug] apc.7.1 isNull=" & (apc Is Nothing) & " Err=" & Err.Number & vbCrLf
+    If apc Is Nothing Then
+        Err.Clear
+        Set apc = CreateObject("MSAPC.Apc")
+        logStream.WriteText "[Push.Debug] apc isNull=" & (apc Is Nothing) & " Err=" & Err.Number & vbCrLf
+    End If
+    If apc Is Nothing Then
+        logStream.WriteText "[Push.Fatal] APC取得失敗 Err=" & Err.Number & ": " & Err.Description & vbCrLf
+        logStream.SaveToFile errPath, 2
+        logStream.Close
+        Exit Sub
+    End If
+    Err.Clear
+
+    Set vbe = apc.VBE
+    logStream.WriteText "[Push.Debug] vbe isNull=" & (vbe Is Nothing) & " Err=" & Err.Number & vbCrLf
+    If Err.Number <> 0 Then
+        logStream.WriteText "[Push.Fatal] VBE取得失敗 Err=" & Err.Number & ": " & Err.Description & vbCrLf
+        logStream.SaveToFile errPath, 2
+        logStream.Close
+        Exit Sub
+    End If
+    Err.Clear
+
+    ' ターゲットプロジェクト検索
+    Set devProj = Nothing
+    For i = 1 To vbe.VBProjects.Count
+        Set proj = vbe.VBProjects.Item(i)
+        If proj.Name = targetProjName Then
+            Set devProj = proj
+            Exit For
+        End If
+    Next
+    logStream.WriteText "[Push.Debug] devProj=" & Not (devProj Is Nothing) & " projects=" & vbe.VBProjects.Count & vbCrLf
+
+    If devProj Is Nothing Then
+        logStream.WriteText "[Push.Fatal] プロジェクト '" & targetProjName & "' が見つかりません" & vbCrLf
+        logStream.SaveToFile errPath, 2
+        logStream.Close
+        Exit Sub
+    End If
+
+    ' モジュール削除処理
+    If fso.FileExists("{{TEMP_DIR}}\delete_list.txt") Then
+        Set inStr = CreateObject("ADODB.Stream")
+        inStr.Type = 2
+        inStr.Charset = "shift_jis"
+        inStr.Open
+        inStr.LoadFromFile "{{TEMP_DIR}}\delete_list.txt"
+
+        Dim delNames, d, k
+        delNames = Split(inStr.ReadText, vbCrLf)
+        inStr.Close
+
+        For Each d In delNames
+            If Trim(d) <> "" Then
+                Set comp = Nothing
+                For k = 1 To devProj.VBComponents.Count
+                    If UCase(devProj.VBComponents.Item(k).Name) = UCase(Trim(d)) Then
+                        Set comp = devProj.VBComponents.Item(k)
+                        Exit For
+                    End If
+                Next
+                If Not comp Is Nothing Then
+                    On Error Resume Next
+                    devProj.VBComponents.Remove comp
+                    If Err.Number <> 0 Then
+                        logStream.WriteText "[Push.Delete] Remove '" & Trim(d) & "' Err=" & Err.Number & ": " & Err.Description & vbCrLf
+                        errCount = errCount + 1
+                        Err.Clear
+                    Else
+                        logStream.WriteText "[Push.Delete] Remove '" & Trim(d) & "' -> OK" & vbCrLf
+                    End If
+                    On Error Resume Next
+                End If
+            End If
+        Next
+        fso.DeleteFile "{{TEMP_DIR}}\delete_list.txt"
+    End If
+
+    Set folder = fso.GetFolder("{{TEMP_DIR}}")
+    logStream.WriteText "[Push.Debug] folder=" & Not (folder Is Nothing) & vbCrLf
+
+    ' ループ中に削除するとコレクションが狂うため、先にパスを配列収集
+    Dim filePaths(), fileCount, fi, fp
+    fileCount = 0
+    If Not (folder Is Nothing) Then
+        ReDim filePaths(folder.Files.Count - 1)
+        logStream.WriteText "[Push.Debug] tempDir files=" & folder.Files.Count & vbCrLf
+        For Each fileItem In folder.Files
+            filePaths(fileCount) = fileItem.Path
+            fileCount = fileCount + 1
+        Next
+    End If
+    logStream.WriteText "[Push.Debug] collected=" & fileCount & vbCrLf
+
+    For fi = 0 To fileCount - 1
+        fp = filePaths(fi)
+        If fso.FileExists(fp) Then
+            If UCase(fso.GetExtensionName(fp)) = "TXT" And InStr(fso.GetFileName(fp), "_TYPE_") > 0 Then
+                parts = Split(fso.GetBaseName(fp), "_TYPE_")
+                compName = parts(0)
+                compType = CInt(parts(1))
+
+                ' C5D_内部ファイルや無効なTypeはスキップして削除
+                If Left(UCase(compName), 4) = "C5D_" Or compType < 1 Or compType > 3 Then
+                    fso.DeleteFile fp
+                Else
+                    logStream.WriteText "[Push.Process] " & compName & " (Type=" & compType & ")" & vbCrLf
+
+                    Set comp = Nothing
+                    For k = 1 To devProj.VBComponents.Count
+                        If UCase(devProj.VBComponents.Item(k).Name) = UCase(compName) Then
+                            Set comp = devProj.VBComponents.Item(k)
+                            Exit For
+                        End If
+                    Next
+
+                    If comp Is Nothing Then
+                        On Error Resume Next
+                        Set comp = devProj.VBComponents.Add(compType)
+                        If Err.Number <> 0 Then
+                            logStream.WriteText "[Push.Add] Add '" & compName & "' Err=" & Err.Number & ": " & Err.Description & vbCrLf
+                            errCount = errCount + 1
+                            Err.Clear
+                        End If
+                        On Error Resume Next
+                        If Not comp Is Nothing Then comp.Name = compName
+                    End If
+
+                    If comp Is Nothing Then
+                        logStream.WriteText "[Push.Add] Component '" & compName & "' could not be created or found. Skipped." & vbCrLf
+                        errCount = errCount + 1
+                    Else
+                        Set inStr = CreateObject("ADODB.Stream")
+                        inStr.Type = 2
+                        inStr.Charset = "shift_jis"
+                        inStr.Open
+                        inStr.LoadFromFile fp
+                        newContent = inStr.ReadText
+                        inStr.Close
+
+                        Set codeMod = comp.CodeModule
+                        On Error Resume Next
+                        If codeMod.CountOfLines > 0 Then
+                            codeMod.DeleteLines 1, codeMod.CountOfLines
+                            If Err.Number <> 0 Then
+                                logStream.WriteText "[Push.DeleteLines] '" & compName & "' Err=" & Err.Number & ": " & Err.Description & vbCrLf
+                                errCount = errCount + 1
+                                Err.Clear
+                            End If
+                        End If
+
+                        codeMod.AddFromString newContent
+                        If Err.Number <> 0 Then
+                            logStream.WriteText "[Push.AddFromString] '" & compName & "' Err=" & Err.Number & ": " & Err.Description & vbCrLf
+                            errCount = errCount + 1
+                            Err.Clear
+                        Else
+                            logCount = logCount + 1
+                        End If
+                        On Error Resume Next
+                    End If
+
+                    fso.DeleteFile fp
+                End If
+            End If
+        End If
+    Next
+
+    logStream.WriteText "[Push.Done] processed=" & logCount & " errors=" & errCount & " time=" & Now & vbCrLf
+    logStream.SaveToFile errPath, 2
+    logStream.Close
+
+    ' 完了フラグ（ADODB.Streamで書き込み）
+    Dim doneStream
+    Set doneStream = CreateObject("ADODB.Stream")
+    doneStream.Type = 2
+    doneStream.Charset = "utf-8"
+    doneStream.Open
+    doneStream.WriteText "done" & vbCrLf
+    doneStream.SaveToFile donePath, 2
+    doneStream.Close
+
+End Sub

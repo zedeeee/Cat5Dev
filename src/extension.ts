@@ -19,15 +19,28 @@ const outputChannel = vscode.window.createOutputChannel('CATIA VBA Sync');
 /** CATScriptのログファイルを読み込み、OutputChannelに出力する。エラーがあればtrueを返す */
 function flushCatScriptErrors(tempDir: string): boolean {
     const errLogPath = path.join(tempDir, 'c5d_err.log');
-    if (!fs.existsSync(errLogPath)) { return false; }
+    const persistLogPath = path.join(os.tmpdir(), 'cat5dev_push.log');
+    if (!fs.existsSync(errLogPath)) {
+        outputChannel.appendLine(`[CATScript Log] ログファイルが存在しません: ${errLogPath}`);
+        outputChannel.show(true);
+        return false;
+    }
     let hasErrors = false;
     try {
         const content = fs.readFileSync(errLogPath, 'utf-8').trim();
-        if (content) {
-            outputChannel.appendLine(`[CATScript Log]\n${content}`);
-            hasErrors = /\[Push\.(Fatal|Add|DeleteLines|AddFromString)\]/.test(content);
-        }
-    } catch (e) { }
+        outputChannel.appendLine(`[CATScript Log]\n${content || '(空)'}`);
+        outputChannel.show(true);
+        hasErrors = /\[Push\.(Fatal|Add|DeleteLines|AddFromString)\]/.test(content);
+        // 永続ログに追記（削除しない）
+        try {
+            const timestamp = new Date().toISOString();
+            fs.appendFileSync(persistLogPath, `\n=== ${timestamp} ===\n${content}\n`);
+        } catch (e) { }
+    } catch (e) {
+        outputChannel.appendLine(`[CATScript Log] 読み込み失敗: ${e}`);
+        outputChannel.show(true);
+    }
+    // デバッグ時は下行をコメントアウト
     try { fs.unlinkSync(errLogPath); } catch (e) { }
     return hasErrors;
 }
@@ -807,37 +820,60 @@ ag_sys.ExecuteScript "${tempDir}", 1, "c5d_check.catvbs", "CATMain", ag_args
     const pushVbsPath = path.join(tempDir, 'c5d_run_push.vbs');
 
     // CATScript to read txt files and push them into target project modules
+    // ログ書き込みはADODB.Streamを使用（FSO書き込みがCATIA環境で動作しない場合があるため）
     const catScriptContent = `
 Sub CATMain()
     On Error Resume Next
-    Dim fso, apc, vbe, i, j, proj, comp, codeMod, inPath, inStr, newContent, devProj
+    Dim fso, apc, vbe, i, j, proj, comp, codeMod, inStr, newContent, devProj
     Dim targetProjName, folder, fileItem, parts, compName, compType
-    Dim errPath, donePath, ef
+    Dim errPath, donePath
     Dim logCount, errCount
+    Dim logStream
 
     targetProjName = "${targetProject}"
-
-    Set fso = CreateObject("Scripting.FileSystemObject")
     errPath = "${tempDir}\\c5d_err.log"
     donePath = "${tempDir}\\c5d_push_done.txt"
     logCount = 0
     errCount = 0
 
-    Set ef = fso.OpenTextFile(errPath, 8, True)
-    ef.WriteLine "[Push.Start] target=" & targetProjName & " time=" & Now
-    ef.Close
+    ' ログをADODB.Streamで蓄積し、最後にまとめて書き出す
+    Set logStream = CreateObject("ADODB.Stream")
+    logStream.Type = 2
+    logStream.Charset = "utf-8"
+    logStream.Open
+    logStream.WriteText "[Push.Start] target=" & targetProjName & " time=" & Now & vbCrLf
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    logStream.WriteText "[Push.Debug] fso=" & Not (fso Is Nothing) & vbCrLf
 
     Set apc = CreateObject("MSAPC.Apc.7.1")
-    If apc Is Nothing Then Set apc = CreateObject("MSAPC.Apc")
-    Set vbe = apc.VBE
-
-    If Err.Number <> 0 Then
-        Set ef = fso.OpenTextFile(errPath, 8, True)
-        ef.WriteLine "[Push.Fatal] VBE取得失敗 Err=" & Err.Number & ": " & Err.Description
-        ef.Close
-        Set ef = fso.OpenTextFile(donePath, 2, True) : ef.WriteLine "error" : ef.Close
+    logStream.WriteText "[Push.Debug] apc.7.1 isNull=" & (apc Is Nothing) & " Err=" & Err.Number & vbCrLf
+    Err.Clear
+    If apc Is Nothing Then
+        Set apc = CreateObject("MSAPC.Apc.6.2")
+        logStream.WriteText "[Push.Debug] apc.6.2 isNull=" & (apc Is Nothing) & " Err=" & Err.Number & vbCrLf
+        Err.Clear
+    End If
+    If apc Is Nothing Then
+        Set apc = CreateObject("MSAPC.Apc")
+        logStream.WriteText "[Push.Debug] apc isNull=" & (apc Is Nothing) & " Err=" & Err.Number & vbCrLf
+        Err.Clear
+    End If
+    If apc Is Nothing Then
+        logStream.WriteText "[Push.Fatal] APC取得失敗 Err=" & Err.Number & ": " & Err.Description & vbCrLf
+        logStream.SaveToFile errPath, 2
+        logStream.Close
         Exit Sub
     End If
+    Set vbe = apc.VBE
+    logStream.WriteText "[Push.Debug] vbe isNull=" & (vbe Is Nothing) & " Err=" & Err.Number & vbCrLf
+    If Err.Number <> 0 Then
+        logStream.WriteText "[Push.Fatal] VBE取得失敗 Err=" & Err.Number & ": " & Err.Description & vbCrLf
+        logStream.SaveToFile errPath, 2
+        logStream.Close
+        Exit Sub
+    End If
+    Err.Clear
 
     Set devProj = Nothing
     For i = 1 To vbe.VBProjects.Count
@@ -847,12 +883,12 @@ Sub CATMain()
             Exit For
         End If
     Next
+    logStream.WriteText "[Push.Debug] devProj=" & Not (devProj Is Nothing) & " projects=" & vbe.VBProjects.Count & vbCrLf
 
     If devProj Is Nothing Then
-        Set ef = fso.OpenTextFile(errPath, 8, True)
-        ef.WriteLine "[Push.Fatal] プロジェクト '" & targetProjName & "' が見つかりません"
-        ef.Close
-        Set ef = fso.OpenTextFile(donePath, 2, True) : ef.WriteLine "error" : ef.Close
+        logStream.WriteText "[Push.Fatal] プロジェクト '" & targetProjName & "' が見つかりません" & vbCrLf
+        logStream.SaveToFile errPath, 2
+        logStream.Close
         Exit Sub
     End If
 
@@ -877,22 +913,17 @@ Sub CATMain()
                         Exit For
                     End If
                 Next
-
                 If Not comp Is Nothing Then
                     On Error Resume Next
                     devProj.VBComponents.Remove comp
                     If Err.Number <> 0 Then
-                        Set ef = fso.OpenTextFile(errPath, 8, True)
-                        ef.WriteLine "[Push.Delete] Remove '" & Trim(d) & "' Err=" & Err.Number & ": " & Err.Description
-                        ef.Close
+                        logStream.WriteText "[Push.Delete] Remove '" & Trim(d) & "' Err=" & Err.Number & ": " & Err.Description & vbCrLf
                         errCount = errCount + 1
                         Err.Clear
                     Else
-                        Set ef = fso.OpenTextFile(errPath, 8, True)
-                        ef.WriteLine "[Push.Delete] Remove '" & Trim(d) & "' -> OK"
-                        ef.Close
+                        logStream.WriteText "[Push.Delete] Remove '" & Trim(d) & "' -> OK" & vbCrLf
                     End If
-                    On Error GoTo 0
+                    On Error Resume Next
                 End If
             End If
         Next
@@ -900,101 +931,118 @@ Sub CATMain()
     End If
 
     Set folder = fso.GetFolder("${tempDir}")
+    logStream.WriteText "[Push.Debug] folder=" & Not (folder Is Nothing) & vbCrLf
 
-    For Each fileItem In folder.Files
-        If UCase(fso.GetExtensionName(fileItem.Path)) = "TXT" And InStr(fileItem.Name, "_TYPE_") > 0 Then
-            parts = Split(fso.GetBaseName(fileItem.Path), "_TYPE_")
-            compName = parts(0)
-            compType = CInt(parts(1))
+    ' ループ中に削除するとコレクションが狂うため、先にパスを配列収集
+    Dim filePaths(), fileCount, fi, fp
+    fileCount = 0
+    If Not (folder Is Nothing) Then
+        ReDim filePaths(folder.Files.Count - 1)
+        logStream.WriteText "[Push.Debug] tempDir files=" & folder.Files.Count & vbCrLf
+        For Each fileItem In folder.Files
+            filePaths(fileCount) = fileItem.Path
+            fileCount = fileCount + 1
+        Next
+    End If
+    logStream.WriteText "[Push.Debug] collected=" & fileCount & vbCrLf
 
-            ' C5D_内部ファイルや無効なTypeはスキップして削除
-            If Left(UCase(compName), 4) = "C5D_" Or compType < 1 Or compType > 3 Then
-                fso.DeleteFile fileItem.Path
-            Else
+    For fi = 0 To fileCount - 1
+        fp = filePaths(fi)
+        If fso.FileExists(fp) Then
+            If UCase(fso.GetExtensionName(fp)) = "TXT" And InStr(fso.GetFileName(fp), "_TYPE_") > 0 Then
+                parts = Split(fso.GetBaseName(fp), "_TYPE_")
+                compName = parts(0)
+                compType = CInt(parts(1))
 
-            Set ef = fso.OpenTextFile(errPath, 8, True)
-            ef.WriteLine "[Push.Process] " & compName & " (Type=" & compType & ")"
-            ef.Close
-
-            Set comp = Nothing
-            For k = 1 To devProj.VBComponents.Count
-                If UCase(devProj.VBComponents.Item(k).Name) = UCase(compName) Then
-                    Set comp = devProj.VBComponents.Item(k)
-                    Exit For
-                End If
-            Next
-
-            If comp Is Nothing Then
-                On Error Resume Next
-                Set comp = devProj.VBComponents.Add(compType)
-                If Err.Number <> 0 Then
-                    Set ef = fso.OpenTextFile(errPath, 8, True)
-                    ef.WriteLine "[Push.Add] Add '" & compName & "' (Type=" & compType & ") Err=" & Err.Number & ": " & Err.Description
-                    ef.Close
-                    errCount = errCount + 1
-                    Err.Clear
-                End If
-                On Error GoTo 0
-                If Not comp Is Nothing Then comp.Name = compName
-            End If
-
-            If comp Is Nothing Then
-                Set ef = fso.OpenTextFile(errPath, 8, True)
-                ef.WriteLine "[Push.Add] Component '" & compName & "' could not be created or found. Skipped."
-                ef.Close
-                errCount = errCount + 1
-            Else
-                Set inStr = CreateObject("ADODB.Stream")
-                inStr.Type = 2
-                inStr.Charset = "shift_jis"
-                inStr.Open
-                inStr.LoadFromFile fileItem.Path
-                newContent = inStr.ReadText
-                inStr.Close
-
-                Set codeMod = comp.CodeModule
-                On Error Resume Next
-                If codeMod.CountOfLines > 0 Then
-                    codeMod.DeleteLines 1, codeMod.CountOfLines
-                    If Err.Number <> 0 Then
-                        Set ef = fso.OpenTextFile(errPath, 8, True)
-                        ef.WriteLine "[Push.DeleteLines] '" & compName & "' Err=" & Err.Number & ": " & Err.Description
-                        ef.Close
-                        errCount = errCount + 1
-                        Err.Clear
-                    End If
-                End If
-
-                codeMod.AddFromString newContent
-                If Err.Number <> 0 Then
-                    Set ef = fso.OpenTextFile(errPath, 8, True)
-                    ef.WriteLine "[Push.AddFromString] '" & compName & "' Err=" & Err.Number & ": " & Err.Description
-                    ef.Close
-                    errCount = errCount + 1
-                    Err.Clear
+                ' C5D_内部ファイルや無効なTypeはスキップして削除
+                If Left(UCase(compName), 4) = "C5D_" Or compType < 1 Or compType > 3 Then
+                    fso.DeleteFile fp
                 Else
-                    logCount = logCount + 1
-                End If
-                On Error GoTo 0
-            End If
+                    logStream.WriteText "[Push.Process] " & compName & " (Type=" & compType & ")" & vbCrLf
 
-            fso.DeleteFile fileItem.Path
+                    Set comp = Nothing
+                    For k = 1 To devProj.VBComponents.Count
+                        If UCase(devProj.VBComponents.Item(k).Name) = UCase(compName) Then
+                            Set comp = devProj.VBComponents.Item(k)
+                            Exit For
+                        End If
+                    Next
+
+                    If comp Is Nothing Then
+                        On Error Resume Next
+                        Set comp = devProj.VBComponents.Add(compType)
+                        If Err.Number <> 0 Then
+                            logStream.WriteText "[Push.Add] Add '" & compName & "' Err=" & Err.Number & ": " & Err.Description & vbCrLf
+                            errCount = errCount + 1
+                            Err.Clear
+                        End If
+                        On Error Resume Next
+                        If Not comp Is Nothing Then comp.Name = compName
+                    End If
+
+                    If comp Is Nothing Then
+                        logStream.WriteText "[Push.Add] Component '" & compName & "' could not be created or found. Skipped." & vbCrLf
+                        errCount = errCount + 1
+                    Else
+                        Set inStr = CreateObject("ADODB.Stream")
+                        inStr.Type = 2
+                        inStr.Charset = "shift_jis"
+                        inStr.Open
+                        inStr.LoadFromFile fp
+                        newContent = inStr.ReadText
+                        inStr.Close
+
+                        Set codeMod = comp.CodeModule
+                        On Error Resume Next
+                        If codeMod.CountOfLines > 0 Then
+                            codeMod.DeleteLines 1, codeMod.CountOfLines
+                            If Err.Number <> 0 Then
+                                logStream.WriteText "[Push.DeleteLines] '" & compName & "' Err=" & Err.Number & ": " & Err.Description & vbCrLf
+                                errCount = errCount + 1
+                                Err.Clear
+                            End If
+                        End If
+
+                        codeMod.AddFromString newContent
+                        If Err.Number <> 0 Then
+                            logStream.WriteText "[Push.AddFromString] '" & compName & "' Err=" & Err.Number & ": " & Err.Description & vbCrLf
+                            errCount = errCount + 1
+                            Err.Clear
+                        Else
+                            logCount = logCount + 1
+                        End If
+                        On Error Resume Next
+                    End If
+
+                    fso.DeleteFile fp
+                End If
             End If
         End If
     Next
 
-    Set ef = fso.OpenTextFile(errPath, 8, True)
-    ef.WriteLine "[Push.Done] processed=" & logCount & " errors=" & errCount & " time=" & Now
-    ef.Close
+    logStream.WriteText "[Push.Done] processed=" & logCount & " errors=" & errCount & " time=" & Now & vbCrLf
+    logStream.SaveToFile errPath, 2
+    logStream.Close
 
-    ' 完了フラグ書き込み（VBSポーリング用）
-    Set ef = fso.OpenTextFile(donePath, 2, True)
-    ef.WriteLine "done"
-    ef.Close
+    ' 完了フラグ（ADODB.Streamで書き込み）
+    Dim doneStream
+    Set doneStream = CreateObject("ADODB.Stream")
+    doneStream.Type = 2
+    doneStream.Charset = "utf-8"
+    doneStream.Open
+    doneStream.WriteText "done" & vbCrLf
+    doneStream.SaveToFile donePath, 2
+    doneStream.Close
 
 End Sub
 `;
     fs.writeFileSync(catScriptPath, catScriptContent, 'utf-8');
+
+    outputChannel.appendLine(`[Push] tempDir: ${tempDir}`);
+    outputChannel.appendLine(`[Push] 対象プロジェクト: ${targetProject}`);
+    outputChannel.appendLine(`[Push] 転送ファイル数: ${count}`);
+    outputChannel.appendLine(`[Push] CATScript生成: ${catScriptPath}`);
+    outputChannel.show(true);
 
     const doneFlagPath = path.join(tempDir, 'c5d_push_done.txt');
     // 既存の完了フラグがあれば削除しておく
@@ -1003,23 +1051,38 @@ End Sub
     const pushVbsScript = `
 On Error Resume Next
 Dim ag_catia, ag_sys, ag_args()
+WScript.Echo "VBS: Start"
 Set ag_catia = GetObject(, "CATIA.Application")
+WScript.Echo "VBS: CATIA Err=" & Err.Number
 If Err.Number <> 0 Then WScript.Quit 1
+Err.Clear
 Set ag_sys = ag_catia.SystemService
+WScript.Echo "VBS: SystemService Err=" & Err.Number
 If Err.Number <> 0 Or ag_sys Is Nothing Then WScript.Quit 1
+Err.Clear
+WScript.Echo "VBS: Calling ExecuteScript..."
 ag_sys.ExecuteScript "${tempDir}", 1, "c5d_push.catvbs", "CATMain", ag_args
-' ExecuteScriptは非同期のため、CATScriptが完了フラグを書くまでポーリング待機
+WScript.Echo "VBS: ExecuteScript returned Err=" & Err.Number
 Dim fso2, doneFile, startTime
 Set fso2 = CreateObject("Scripting.FileSystemObject")
 doneFile = "${tempDir}\\c5d_push_done.txt"
+WScript.Echo "VBS: doneFile exists=" & fso2.FileExists(doneFile)
 startTime = Now
 Do While Not fso2.FileExists(doneFile)
     WScript.Sleep 500
-    If DateDiff("s", startTime, Now) > 180 Then Exit Do
+    If DateDiff("s", startTime, Now) > 60 Then
+        WScript.Echo "VBS: Polling timeout"
+        Exit Do
+    End If
 Loop
+WScript.Echo "VBS: Poll done, doneFile exists=" & fso2.FileExists(doneFile)
 If fso2.FileExists(doneFile) Then fso2.DeleteFile doneFile
+WScript.Echo "VBS: End"
 `;
     fs.writeFileSync(pushVbsPath, pushVbsScript, 'utf-8');
+    outputChannel.appendLine(`[Push] VBS生成: ${pushVbsPath}`);
+    outputChannel.appendLine(`[Push] cscript実行開始...`);
+    outputChannel.show(true);
 
     vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
@@ -1028,6 +1091,8 @@ If fso2.FileExists(doneFile) Then fso2.DeleteFile doneFile
     }, async (progress) => {
         return new Promise<void>((resolve, reject) => {
             exec(`%SystemRoot%\\SysWOW64\\cscript.exe //nologo "${pushVbsPath}"`, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+                outputChannel.appendLine(`[Push] cscript終了 error=${error?.code ?? 'null'} stdout="${stdout.trim()}" stderr="${stderr.trim()}"`);
+                outputChannel.show(true);
                 if (fs.existsSync(pushVbsPath)) fs.unlinkSync(pushVbsPath);
                 if (fs.existsSync(catScriptPath)) fs.unlinkSync(catScriptPath);
 

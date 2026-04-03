@@ -18,6 +18,9 @@ export async function formatVbaDocument(
     }
 
     const opts = readFormatterOptions(workspaceRoot);
+    if (!opts.enabled) {
+        return null;
+    }
 
     const requestBody = JSON.stringify({
         code: text,

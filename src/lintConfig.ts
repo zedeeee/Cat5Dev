@@ -125,6 +125,7 @@ export function readLintOptions(workspaceRoot: string): LintOptions {
 }
 
 export interface FormatterOptions {
+    enabled: boolean;
     indent_size: number;
     capitalize_keywords: boolean;
     fix_indentation: boolean;
@@ -140,6 +141,7 @@ export interface FormatterOptions {
 }
 
 export const DEFAULT_FORMATTER_OPTIONS: FormatterOptions = {
+    enabled: true,
     indent_size: 4,
     capitalize_keywords: true,
     fix_indentation: true,
@@ -164,7 +166,11 @@ export function readFormatterOptions(workspaceRoot: string): FormatterOptions {
         const toml = parseToml(content);
         const sec = toml['formatter'];
         if (sec) {
+            if (getBool(sec, 'enabled', true) === false) {
+                return { ...DEFAULT_FORMATTER_OPTIONS, enabled: false };
+            }
             return {
+                enabled: true,
                 indent_size:               getInt (sec, 'indent_size',               DEFAULT_FORMATTER_OPTIONS.indent_size),
                 capitalize_keywords:       getBool(sec, 'capitalize_keywords',       DEFAULT_FORMATTER_OPTIONS.capitalize_keywords),
                 fix_indentation:           getBool(sec, 'fix_indentation',           DEFAULT_FORMATTER_OPTIONS.fix_indentation),
@@ -184,6 +190,7 @@ export function readFormatterOptions(workspaceRoot: string): FormatterOptions {
     // フォールバック: VSCode 設定から読む
     const cfg = vscode.workspace.getConfiguration('cat5dev.formatter');
     return {
+        enabled:                   true,
         indent_size:               cfg.get<number> ('indentSize',              DEFAULT_FORMATTER_OPTIONS.indent_size),
         capitalize_keywords:       cfg.get<boolean>('capitalizeKeywords',      DEFAULT_FORMATTER_OPTIONS.capitalize_keywords),
         fix_indentation:           cfg.get<boolean>('fixIndentation',          DEFAULT_FORMATTER_OPTIONS.fix_indentation),
