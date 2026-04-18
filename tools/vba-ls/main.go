@@ -31,6 +31,7 @@ func loadDB() *TLBDatabase {
 	if path != "" {
 		db, err := LoadTLBDatabase(path)
 		if err == nil {
+			db.EnsureScriptingTypes()
 			return db
 		}
 		fmt.Fprintf(os.Stderr, "vba-ls: TLBデータベース読み込みエラー: %v\n", err)

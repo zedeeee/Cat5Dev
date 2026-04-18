@@ -552,12 +552,13 @@ func checkUnusedVariables(lines []string, opts LintOptions) []Diagnostic {
 		if scopeStart < 0 || len(scopeLines) == 0 {
 			return
 		}
-		// Dim 宣言を収集
+		// Dim 宣言を収集（コメント・文字列リテラルは除外）
 		var declared []varInfo
 		for j, sl := range scopeLines {
-			matches := reDimVar.FindAllStringSubmatchIndex(sl, -1)
+			codeLine := codeText(sl)
+			matches := reDimVar.FindAllStringSubmatchIndex(codeLine, -1)
 			for _, m := range matches {
-				varName := sl[m[2]:m[3]]
+				varName := codeLine[m[2]:m[3]]
 				declared = append(declared, varInfo{varName, scopeStartIdx + j})
 			}
 		}

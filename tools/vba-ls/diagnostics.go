@@ -35,7 +35,7 @@ func BuildDiagnostics(src string, table *SymbolTable, db *TLBDatabase) []Diagnos
 			if sym == nil || sym.TypeName == "" {
 				continue
 			}
-			if !hasMember(db, sym.TypeName, memberName) {
+			if db.TypeExists(sym.TypeName) && !hasMember(db, sym.TypeName, memberName) {
 				diags = append(diags, Diagnostic{
 					Range: Range{
 						Start: Position{Line: uint32(lineIdx), Character: uint32(match[4])},

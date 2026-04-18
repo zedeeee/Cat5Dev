@@ -1,11 +1,14 @@
 package main
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/antlr4-go/antlr/v4"
 	vbaantlr "github.com/nori/cat5dev/vba-ls/antlr"
 )
+
+var reCreateObject = regexp.MustCompile(`(?i)CreateObject\s*\(\s*"([^"]+)"\s*\)`)
 
 // ParseSymbols は VBA ソースを ANTLR4 でパースしてシンボルテーブルを返す。
 func ParseSymbols(src string) *SymbolTable {
@@ -111,15 +114,22 @@ func (l *symbolListener) EnterSetStatement(ctx *vbaantlr.SetStatementContext) {
 	lhs := strings.TrimSpace(inner[:eqIdx])
 	rhs := strings.TrimSpace(inner[eqIdx+1:])
 
-	// New TypeName / CreateObject 等は除外
-	if strings.HasPrefix(strings.ToLower(rhs), "new") {
+	rhsLow := strings.ToLower(rhs)
+	if strings.HasPrefix(rhsLow, "new") {
+		// New TypeName
 		typeName := strings.TrimSpace(rhs[3:])
-		// ドット・括弧を除去
 		if idx := strings.IndexAny(typeName, ".("); idx >= 0 {
 			typeName = typeName[:idx]
 		}
 		if lhs != "" && typeName != "" {
-			// 既存シンボルの型名を更新、なければ追加
+			l.upsertSymbol(lhs, typeName, ctx.GetStart().GetLine()-1, ctx.GetStart().GetColumn())
+		}
+	} else if m := reCreateObject.FindStringSubmatch(rhs); m != nil {
+		// CreateObject("ProgID") → ProgID の最後のコンポーネントを型名とする
+		progID := m[1]
+		parts := strings.Split(progID, ".")
+		typeName := parts[len(parts)-1]
+		if lhs != "" && typeName != "" {
 			l.upsertSymbol(lhs, typeName, ctx.GetStart().GetLine()-1, ctx.GetStart().GetColumn())
 		}
 	}

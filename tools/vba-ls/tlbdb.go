@@ -212,6 +212,125 @@ SELECT COUNT(*) FROM (
 	return count > 0
 }
 
+// EnsureScriptingTypes は Scripting.Dictionary / FileSystemObject 等の
+// Windows Scripting ランタイム型が DB に未登録であれば挿入する。
+func (t *TLBDatabase) EnsureScriptingTypes() {
+	if t == nil || t.db == nil {
+		return
+	}
+
+	type memberDef struct {
+		name       string
+		returnType string
+		isProp     bool
+		params     []TLBParam
+	}
+	type typeDef struct {
+		name    string
+		members []memberDef
+	}
+
+	types := []typeDef{
+		{
+			name: "Dictionary",
+			members: []memberDef{
+				{name: "Add", returnType: "", isProp: false, params: []TLBParam{{Name: "Key", Type: "Variant"}, {Name: "Item", Type: "Variant"}}},
+				{name: "Remove", returnType: "", isProp: false, params: []TLBParam{{Name: "Key", Type: "Variant"}}},
+				{name: "RemoveAll", returnType: "", isProp: false},
+				{name: "Exists", returnType: "Boolean", isProp: false, params: []TLBParam{{Name: "Key", Type: "Variant"}}},
+				{name: "Keys", returnType: "Variant", isProp: false},
+				{name: "Items", returnType: "Variant", isProp: false},
+				{name: "Count", returnType: "Long", isProp: true},
+				{name: "Item", returnType: "Variant", isProp: true},
+				{name: "Key", returnType: "Variant", isProp: true},
+				{name: "CompareMode", returnType: "Long", isProp: true},
+			},
+		},
+		{
+			name: "FileSystemObject",
+			members: []memberDef{
+				{name: "OpenTextFile", returnType: "TextStream", isProp: false, params: []TLBParam{{Name: "filename", Type: "String"}, {Name: "iomode", Type: "Long"}, {Name: "create", Type: "Boolean"}, {Name: "format", Type: "Long"}}},
+				{name: "CreateTextFile", returnType: "TextStream", isProp: false, params: []TLBParam{{Name: "filename", Type: "String"}, {Name: "overwrite", Type: "Boolean"}, {Name: "unicode", Type: "Boolean"}}},
+				{name: "FileExists", returnType: "Boolean", isProp: false, params: []TLBParam{{Name: "filespec", Type: "String"}}},
+				{name: "FolderExists", returnType: "Boolean", isProp: false, params: []TLBParam{{Name: "folderspec", Type: "String"}}},
+				{name: "DriveExists", returnType: "Boolean", isProp: false, params: []TLBParam{{Name: "drivespec", Type: "String"}}},
+				{name: "GetFile", returnType: "File", isProp: false, params: []TLBParam{{Name: "filespec", Type: "String"}}},
+				{name: "GetFolder", returnType: "Folder", isProp: false, params: []TLBParam{{Name: "folderspec", Type: "String"}}},
+				{name: "GetDrive", returnType: "Drive", isProp: false, params: []TLBParam{{Name: "drivespec", Type: "String"}}},
+				{name: "GetAbsolutePathName", returnType: "String", isProp: false, params: []TLBParam{{Name: "path", Type: "String"}}},
+				{name: "GetBaseName", returnType: "String", isProp: false, params: []TLBParam{{Name: "path", Type: "String"}}},
+				{name: "GetExtensionName", returnType: "String", isProp: false, params: []TLBParam{{Name: "path", Type: "String"}}},
+				{name: "GetFileName", returnType: "String", isProp: false, params: []TLBParam{{Name: "path", Type: "String"}}},
+				{name: "GetParentFolderName", returnType: "String", isProp: false, params: []TLBParam{{Name: "path", Type: "String"}}},
+				{name: "GetTempName", returnType: "String", isProp: false},
+				{name: "CopyFile", returnType: "", isProp: false, params: []TLBParam{{Name: "source", Type: "String"}, {Name: "destination", Type: "String"}}},
+				{name: "MoveFile", returnType: "", isProp: false, params: []TLBParam{{Name: "source", Type: "String"}, {Name: "destination", Type: "String"}}},
+				{name: "DeleteFile", returnType: "", isProp: false, params: []TLBParam{{Name: "filespec", Type: "String"}}},
+				{name: "CopyFolder", returnType: "", isProp: false, params: []TLBParam{{Name: "source", Type: "String"}, {Name: "destination", Type: "String"}}},
+				{name: "MoveFolder", returnType: "", isProp: false, params: []TLBParam{{Name: "source", Type: "String"}, {Name: "destination", Type: "String"}}},
+				{name: "DeleteFolder", returnType: "", isProp: false, params: []TLBParam{{Name: "folderspec", Type: "String"}}},
+				{name: "CreateFolder", returnType: "Folder", isProp: false, params: []TLBParam{{Name: "folderpath", Type: "String"}}},
+				{name: "BuildPath", returnType: "String", isProp: false, params: []TLBParam{{Name: "path", Type: "String"}, {Name: "name", Type: "String"}}},
+				{name: "Drives", returnType: "Drives", isProp: true},
+			},
+		},
+		{
+			name: "TextStream",
+			members: []memberDef{
+				{name: "ReadLine", returnType: "String", isProp: false},
+				{name: "ReadAll", returnType: "String", isProp: false},
+				{name: "Read", returnType: "String", isProp: false, params: []TLBParam{{Name: "characters", Type: "Long"}}},
+				{name: "Write", returnType: "", isProp: false, params: []TLBParam{{Name: "text", Type: "String"}}},
+				{name: "WriteLine", returnType: "", isProp: false, params: []TLBParam{{Name: "text", Type: "String"}}},
+				{name: "WriteBlankLines", returnType: "", isProp: false, params: []TLBParam{{Name: "lines", Type: "Long"}}},
+				{name: "Skip", returnType: "", isProp: false, params: []TLBParam{{Name: "characters", Type: "Long"}}},
+				{name: "SkipLine", returnType: "", isProp: false},
+				{name: "Close", returnType: "", isProp: false},
+				{name: "AtEndOfStream", returnType: "Boolean", isProp: true},
+				{name: "AtEndOfLine", returnType: "Boolean", isProp: true},
+				{name: "Line", returnType: "Long", isProp: true},
+				{name: "Column", returnType: "Long", isProp: true},
+			},
+		},
+	}
+
+	for _, td := range types {
+		if t.TypeExists(td.name) {
+			continue
+		}
+		var ifaceID int64
+		err := t.db.QueryRow(
+			"INSERT INTO interfaces(name, parent_id) VALUES(?, NULL) RETURNING id", td.name,
+		).Scan(&ifaceID)
+		if err != nil {
+			continue
+		}
+		for _, m := range td.members {
+			if m.isProp {
+				_, _ = t.db.Exec(
+					"INSERT INTO properties(interface_id, name, type) VALUES(?, ?, ?)",
+					ifaceID, m.name, m.returnType,
+				)
+			} else {
+				var methodID int64
+				err := t.db.QueryRow(
+					"INSERT INTO methods(interface_id, name, return_type) VALUES(?, ?, ?) RETURNING id",
+					ifaceID, m.name, m.returnType,
+				).Scan(&methodID)
+				if err != nil {
+					continue
+				}
+				for pos, p := range m.params {
+					_, _ = t.db.Exec(
+						"INSERT INTO parameters(method_id, name, type, position) VALUES(?, ?, ?, ?)",
+						methodID, p.Name, p.Type, pos,
+					)
+				}
+			}
+		}
+	}
+}
+
 // TypeExists は型名が DB に存在するか確認する。
 func (t *TLBDatabase) TypeExists(typeName string) bool {
 	var count int
