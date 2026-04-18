@@ -16,7 +16,11 @@
       "Bash(node -e \"const os = require\\(''os''\\); console.log\\(os.tmpdir\\(\\)\\);\")",
       "Bash(npm run:*)",
       "Bash(wait)",
-      "Bash(ls \"c:/nori/Cat5Dev/\"*.vsix)"
+      "Bash(ls \"c:/nori/Cat5Dev/\"*.vsix)",
+      "Bash(go build *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(vsce package *)"
     ]
   }
 }

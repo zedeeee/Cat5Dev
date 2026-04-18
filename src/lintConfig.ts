@@ -82,7 +82,17 @@ function getInt(map: Record<string, string>, key: string, def: number): number {
 export function readLintOptions(workspaceRoot: string): LintOptions {
     const tomlPath = path.join(workspaceRoot, 'cat5dev.toml');
     if (!fs.existsSync(tomlPath)) {
-        return { ...DEFAULT_LINT_OPTIONS };
+        return {
+            option_explicit: false,
+            on_error_resume_next: false,
+            goto: false,
+            max_line_length: 0,
+            unused_variables: false,
+            max_nesting_depth: 0,
+            max_function_lines: 0,
+            unmatched_parens: false,
+            unmatched_blocks: false,
+        };
     }
 
     let content: string;
@@ -94,9 +104,9 @@ export function readLintOptions(workspaceRoot: string): LintOptions {
 
     const toml = parseToml(content);
 
-    // [lint] セクションで enabled = false なら全ルール無効
+    // [lint] セクションで enabled = false（デフォルト）なら全ルール無効
     const lintSection = toml['lint'] ?? {};
-    if (getBool(lintSection, 'enabled', true) === false) {
+    if (getBool(lintSection, 'enabled', false) === false) {
         return {
             option_explicit: false,
             on_error_resume_next: false,
@@ -141,7 +151,7 @@ export interface FormatterOptions {
 }
 
 export const DEFAULT_FORMATTER_OPTIONS: FormatterOptions = {
-    enabled: true,
+    enabled: false,
     indent_size: 4,
     capitalize_keywords: true,
     fix_indentation: true,
@@ -166,7 +176,7 @@ export function readFormatterOptions(workspaceRoot: string): FormatterOptions {
         const toml = parseToml(content);
         const sec = toml['formatter'];
         if (sec) {
-            if (getBool(sec, 'enabled', true) === false) {
+            if (getBool(sec, 'enabled', false) === false) {
                 return { ...DEFAULT_FORMATTER_OPTIONS, enabled: false };
             }
             return {
@@ -190,7 +200,7 @@ export function readFormatterOptions(workspaceRoot: string): FormatterOptions {
     // フォールバック: VSCode 設定から読む
     const cfg = vscode.workspace.getConfiguration('cat5dev.formatter');
     return {
-        enabled:                   true,
+        enabled:                   false,
         indent_size:               cfg.get<number> ('indentSize',              DEFAULT_FORMATTER_OPTIONS.indent_size),
         capitalize_keywords:       cfg.get<boolean>('capitalizeKeywords',      DEFAULT_FORMATTER_OPTIONS.capitalize_keywords),
         fix_indentation:           cfg.get<boolean>('fixIndentation',          DEFAULT_FORMATTER_OPTIONS.fix_indentation),
@@ -211,7 +221,7 @@ export function tomlTemplate(): string {
     return `# Cat5Dev configuration file
 
 [lint]
-enabled = true
+enabled = false
 
 [lint.rules]
 # Warn when Option Explicit is not declared
@@ -242,6 +252,9 @@ unmatched_parens = true
 unmatched_blocks = true
 
 [formatter]
+# Enable or disable the formatter entirely
+enabled = false
+
 # Number of spaces per indentation level
 indent_size = 4
 
