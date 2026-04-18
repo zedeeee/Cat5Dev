@@ -20,7 +20,10 @@
       "Bash(go build *)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(vsce package *)"
+      "Bash(vsce package *)",
+      "Bash(git -C c:/nori/Cat5Dev log --oneline -5 -- tools/vba-ls/)",
+      "Bash(grep -E \"\\\\.\\(exe|go\\)$\")",
+      "Bash(git -C c:/nori/Cat5Dev remote -v)"
     ]
   }
 }
