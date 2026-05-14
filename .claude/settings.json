@@ -9,7 +9,10 @@
       "Bash(ls -la \"c:\\\\nori\\\\Cat5Dev\\\\\" | head -20)",
       "Read(//c/nori/**)",
       "Bash(xargs grep -l \"Enum\\\\|keyword\")",
-      "Bash(go test *)"
+      "Bash(go test *)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('contributes',{}\\), indent=2, ensure_ascii=False\\)\\)\")",
+      "PowerShell(python -c \"import json; d=json.load\\(open\\('package.json', encoding='utf-8'\\)\\); print\\(json.dumps\\(d.get\\('contributes',{}\\), indent=2, ensure_ascii=False\\)\\)\")",
+      "PowerShell(npm run compile 2>&1)"
     ]
   }
 }

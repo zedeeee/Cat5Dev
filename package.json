@@ -93,7 +93,6 @@
         ],
         "grammars": [
             {
-                "language": "vb",
                 "scopeName": "injection.vba-keywords",
                 "path": "./syntaxes/vba-keywords.tmLanguage.json",
                 "injectTo": ["source.vb"]
