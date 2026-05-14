@@ -272,12 +272,13 @@ func classifyLine(trimmed string) lineKind {
 		return kindStarter
 	}
 
-	// Public/Private/Friend/Static + Sub/Function/Property → starter
+	// Public/Private/Friend/Static + Sub/Function/Property/Enum/Type/Class → starter
 	if firstLow == "public" || firstLow == "private" || firstLow == "friend" ||
 		firstLow == "static" || firstLow == "global" {
 		nextTok, _ := firstToken(strings.TrimSpace(rest))
 		nextLow := strings.ToLower(nextTok)
-		if nextLow == "sub" || nextLow == "function" || nextLow == "property" {
+		if nextLow == "sub" || nextLow == "function" || nextLow == "property" ||
+			nextLow == "enum" || nextLow == "type" || nextLow == "class" {
 			return kindStarter
 		}
 	}

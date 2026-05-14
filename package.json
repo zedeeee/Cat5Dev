@@ -2,7 +2,7 @@
     "name": "cat5dev",
     "displayName": "CATIA V5 VBA",
     "description": "We provide support for CATIA V5 VBA macro development",
-    "version": "0.3.6",
+    "version": "0.3.7",
     "repository": {
         "type": "git",
         "url": "https://github.com/kantoku-code/Cat5Dev.git"
@@ -89,6 +89,14 @@
                     ".cls_utf",
                     ".frm_utf"
                 ]
+            }
+        ],
+        "grammars": [
+            {
+                "language": "vb",
+                "scopeName": "injection.vba-keywords",
+                "path": "./syntaxes/vba-keywords.tmLanguage.json",
+                "injectTo": ["source.vb"]
             }
         ],
         "commands": [

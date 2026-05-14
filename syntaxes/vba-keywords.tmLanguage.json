@@ -1,0 +1,15 @@
+{
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "VBA Keywords Injection",
+    "scopeName": "injection.vba-keywords",
+    "injectionSelector": "L:source.vb",
+    "patterns": [
+        { "include": "#enum-type-keywords" }
+    ],
+    "repository": {
+        "enum-type-keywords": {
+            "match": "(?i)\\b(Enum|End\\s+Enum|Type|End\\s+Type)\\b",
+            "name": "keyword.other.vba"
+        }
+    }
+}

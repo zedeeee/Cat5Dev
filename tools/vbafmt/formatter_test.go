@@ -219,6 +219,57 @@ func TestFixIndentation(t *testing.T) {
 				"End Type",
 			),
 		},
+		{
+			name: "Public Enum block",
+			input: joinLF(
+				"Public Enum CREATE_STATUS",
+				"POWER_OFFSET = 1",
+				"OFFSET_WUTH_CRACK = 2",
+				"NORMAL_OFFSET = 3",
+				"FAULT = 4",
+				"End Enum",
+			),
+			want: joinLF(
+				"Public Enum CREATE_STATUS",
+				"    POWER_OFFSET = 1",
+				"    OFFSET_WUTH_CRACK = 2",
+				"    NORMAL_OFFSET = 3",
+				"    FAULT = 4",
+				"End Enum",
+			),
+		},
+		{
+			name: "Public Type block",
+			input: joinLF(
+				"Public Type personalInfo",
+				"name As String",
+				"age As Integer",
+				"address As String",
+				"End Type",
+			),
+			want: joinLF(
+				"Public Type personalInfo",
+				"    name As String",
+				"    age As Integer",
+				"    address As String",
+				"End Type",
+			),
+		},
+		{
+			name: "Private Enum block",
+			input: joinLF(
+				"Private Enum MY_ENUM",
+				"VAL_A = 1",
+				"VAL_B = 2",
+				"End Enum",
+			),
+			want: joinLF(
+				"Private Enum MY_ENUM",
+				"    VAL_A = 1",
+				"    VAL_B = 2",
+				"End Enum",
+			),
+		},
 	}
 
 	for _, tt := range tests {
