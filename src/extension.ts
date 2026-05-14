@@ -19,28 +19,15 @@ const outputChannel = vscode.window.createOutputChannel('CATIA VBA Sync');
 /** CATScriptのログファイルを読み込み、OutputChannelに出力する。エラーがあればtrueを返す */
 function flushCatScriptErrors(tempDir: string): boolean {
     const errLogPath = path.join(tempDir, 'c5d_err.log');
-    const persistLogPath = path.join(os.tmpdir(), 'cat5dev_push.log');
-    if (!fs.existsSync(errLogPath)) {
-        outputChannel.appendLine(`[CATScript Log] ログファイルが存在しません: ${errLogPath}`);
-        outputChannel.show(true);
-        return false;
-    }
     let hasErrors = false;
     try {
         const content = fs.readFileSync(errLogPath, 'utf-8').trim();
         outputChannel.appendLine(`[CATScript Log]\n${content || '(空)'}`);
         outputChannel.show(true);
         hasErrors = /\[Push\.(Fatal|Add|DeleteLines|AddFromString)\]/.test(content);
-        // 永続ログに追記（削除しない）
-        try {
-            const timestamp = new Date().toISOString();
-            fs.appendFileSync(persistLogPath, `\n=== ${timestamp} ===\n${content}\n`);
-        } catch (e) { }
-    } catch (e) {
-        outputChannel.appendLine(`[CATScript Log] 読み込み失敗: ${e}`);
-        outputChannel.show(true);
+    } catch {
+        // ファイルが存在しない場合はスキップ
     }
-    // デバッグ時は下行をコメントアウト
     try { fs.unlinkSync(errLogPath); } catch (e) { }
     return hasErrors;
 }

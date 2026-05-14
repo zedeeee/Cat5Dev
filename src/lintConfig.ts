@@ -16,12 +16,12 @@ export interface LintOptions {
 
 export const DEFAULT_LINT_OPTIONS: LintOptions = {
     option_explicit: true,
-    on_error_resume_next: true,
-    goto: true,
-    max_line_length: 200,
+    on_error_resume_next: false,
+    goto: false,
+    max_line_length: 100,
     unused_variables: true,
     max_nesting_depth: 5,
-    max_function_lines: 100,
+    max_function_lines: 300,
     unmatched_parens: true,
     unmatched_blocks: true,
 };
@@ -163,7 +163,7 @@ export const DEFAULT_FORMATTER_OPTIONS: FormatterOptions = {
     normalize_comma_spacing: false,
     normalize_comment_space: false,
     expand_type_suffixes: false,
-    format_on_save: false,
+    format_on_save: true,
 };
 
 /** ワークスペースルートの cat5dev.toml を読み込んで FormatterOptions を返す。
@@ -216,8 +216,10 @@ export function readFormatterOptions(workspaceRoot: string): FormatterOptions {
     };
 }
 
-/** cat5dev.toml の雛形テキストを返す */
+/** cat5dev.toml の雛形テキストを返す。値は DEFAULT_*_OPTIONS から生成する */
 export function tomlTemplate(): string {
+    const l = DEFAULT_LINT_OPTIONS;
+    const f = DEFAULT_FORMATTER_OPTIONS;
     return `# Cat5Dev configuration file
 
 [lint]
@@ -225,70 +227,70 @@ enabled = false
 
 [lint.rules]
 # Warn when Option Explicit is not declared
-option_explicit = true
+option_explicit = ${l.option_explicit}
 
 # Warn on usage of On Error Resume Next
-on_error_resume_next = true
+on_error_resume_next = ${l.on_error_resume_next}
 
 # Warn on GoTo usage (On Error GoTo is excluded)
-goto = true
+goto = ${l.goto}
 
 # Warn when a line exceeds the specified character count (0 = disabled)
-max_line_length = 200
+max_line_length = ${l.max_line_length}
 
 # Warn when a variable is declared with Dim but never used
-unused_variables = true
+unused_variables = ${l.unused_variables}
 
 # Warn when nesting depth exceeds the threshold (0 = disabled)
-max_nesting_depth = 5
+max_nesting_depth = ${l.max_nesting_depth}
 
 # Warn when a Sub/Function exceeds the line count threshold (0 = disabled)
-max_function_lines = 100
+max_function_lines = ${l.max_function_lines}
 
 # Report mismatched parentheses as an error
-unmatched_parens = true
+unmatched_parens = ${l.unmatched_parens}
 
 # Report missing End If / End Sub / End Function etc. as an error
-unmatched_blocks = true
+unmatched_blocks = ${l.unmatched_blocks}
 
 [formatter]
 # Enable or disable the formatter entirely
 enabled = false
 
 # Number of spaces per indentation level
-indent_size = 4
+indent_size = ${f.indent_size}
 
 # Capitalize VBA keywords (If, Dim, Sub, etc.)
-capitalize_keywords = true
+capitalize_keywords = ${f.capitalize_keywords}
 
 # Fix incorrect indentation
-fix_indentation = true
+fix_indentation = ${f.fix_indentation}
 
 # Remove trailing whitespace from each line
-trim_trailing_space = true
+trim_trailing_space = ${f.trim_trailing_space}
 
 # Ensure a space before line continuation character (_)
-ensure_continuation_space = true
+ensure_continuation_space = ${f.ensure_continuation_space}
 
 # Indent continuation lines by one level
-indent_continuation_lines = true
+indent_continuation_lines = ${f.indent_continuation_lines}
 
 # Maximum number of consecutive blank lines (0 = disabled)
-max_blank_lines = 2
+max_blank_lines = ${f.max_blank_lines}
 
 # Normalize spacing around operators (=, +, -, etc.)
-normalize_operator_spacing = false
+normalize_operator_spacing = ${f.normalize_operator_spacing}
 
 # Normalize spacing after commas
-normalize_comma_spacing = false
+normalize_comma_spacing = ${f.normalize_comma_spacing}
 
 # Ensure a space after comment character (')
-normalize_comment_space = false
+normalize_comment_space = ${f.normalize_comment_space}
 
 # Expand type suffix shorthand (% → Integer, $ → String, etc.)
-expand_type_suffixes = false
+expand_type_suffixes = ${f.expand_type_suffixes}
 
 # Automatically format on save
-format_on_save = false
+format_on_save = ${f.format_on_save}
 `;
 }

@@ -213,7 +213,8 @@ SELECT COUNT(*) FROM (
 }
 
 // EnsureScriptingTypes は Scripting.Dictionary / FileSystemObject 等の
-// Windows Scripting ランタイム型が DB に未登録であれば挿入する。
+// Windows Scripting ランタイム型、および VBA 組み込み型（Collection 等）が
+// DB に未登録または不足メンバーがあれば挿入する。
 func (t *TLBDatabase) EnsureScriptingTypes() {
 	if t == nil || t.db == nil {
 		return
@@ -231,6 +232,23 @@ func (t *TLBDatabase) EnsureScriptingTypes() {
 	}
 
 	types := []typeDef{
+		{
+			// VBA 組み込み Collection: CATIA 固有型として DB に存在するが
+			// VBA 標準メソッド Add/Item/Remove が未登録のため補完する。
+			name: "Collection",
+			members: []memberDef{
+				{name: "Add", returnType: "", isProp: false, params: []TLBParam{
+					{Name: "Item", Type: "Variant"}, {Name: "Key", Type: "String"},
+					{Name: "Before", Type: "Variant"}, {Name: "After", Type: "Variant"},
+				}},
+				{name: "Item", returnType: "Variant", isProp: false, params: []TLBParam{
+					{Name: "Index", Type: "Variant"},
+				}},
+				{name: "Remove", returnType: "", isProp: false, params: []TLBParam{
+					{Name: "Index", Type: "Variant"},
+				}},
+			},
+		},
 		{
 			name: "Dictionary",
 			members: []memberDef{
@@ -295,17 +313,39 @@ func (t *TLBDatabase) EnsureScriptingTypes() {
 	}
 
 	for _, td := range types {
-		if t.TypeExists(td.name) {
-			continue
-		}
 		var ifaceID int64
-		err := t.db.QueryRow(
-			"INSERT INTO interfaces(name, parent_id) VALUES(?, NULL) RETURNING id", td.name,
-		).Scan(&ifaceID)
-		if err != nil {
-			continue
+		if t.TypeExists(td.name) {
+			// 既存型: interface_id を取得して不足メンバーだけ追加する
+			if err := t.db.QueryRow(
+				"SELECT id FROM interfaces WHERE name = ? COLLATE NOCASE LIMIT 1", td.name,
+			).Scan(&ifaceID); err != nil {
+				continue
+			}
+		} else {
+			// 新規型: 登録してから interface_id を取得する
+			if err := t.db.QueryRow(
+				"INSERT INTO interfaces(name, parent_id) VALUES(?, NULL) RETURNING id", td.name,
+			).Scan(&ifaceID); err != nil {
+				continue
+			}
 		}
 		for _, m := range td.members {
+			// そのインターフェース自身に同名メンバーが既にあればスキップ
+			var count int
+			if m.isProp {
+				_ = t.db.QueryRow(
+					"SELECT COUNT(*) FROM properties WHERE interface_id = ? AND name = ? COLLATE NOCASE",
+					ifaceID, m.name,
+				).Scan(&count)
+			} else {
+				_ = t.db.QueryRow(
+					"SELECT COUNT(*) FROM methods WHERE interface_id = ? AND name = ? COLLATE NOCASE",
+					ifaceID, m.name,
+				).Scan(&count)
+			}
+			if count > 0 {
+				continue
+			}
 			if m.isProp {
 				_, _ = t.db.Exec(
 					"INSERT INTO properties(interface_id, name, type) VALUES(?, ?, ?)",
