@@ -10,7 +10,7 @@ import { VbaDocumentFormatter, registerFormatOnSave, formatVbaDocument } from '.
 import { VbaServer } from './vbaServer';
 import { t, getLanguage, setLanguage } from './i18n';
 import { registerLinter } from './linter';
-import { tomlTemplate } from './lintConfig';
+import { tomlTemplate, gitignoreTemplate } from './lintConfig';
 import { startLspClient } from './lspClient';
 
 const outputChannel = vscode.window.createOutputChannel('CATIA VBA Sync');
@@ -172,6 +172,20 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         fs.writeFileSync(tomlPath, tomlTemplate(), 'utf-8');
+
+        const gitignorePath = path.join(rootPath, '.gitignore');
+        if (fs.existsSync(gitignorePath)) {
+            const ans = await vscode.window.showWarningMessage(
+                '.gitignore は既に存在します。上書きしますか？',
+                { modal: true },
+                '上書き'
+            );
+            if (ans === '上書き') {
+                fs.writeFileSync(gitignorePath, gitignoreTemplate(), 'utf-8');
+            }
+        } else {
+            fs.writeFileSync(gitignorePath, gitignoreTemplate(), 'utf-8');
+        }
 
         const doc = await vscode.workspace.openTextDocument(tomlPath);
         await vscode.window.showTextDocument(doc);

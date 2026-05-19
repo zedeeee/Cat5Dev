@@ -23,7 +23,10 @@
       "Bash(vsce package *)",
       "Bash(git -C c:/nori/Cat5Dev log --oneline -5 -- tools/vba-ls/)",
       "Bash(grep -E \"\\\\.\\(exe|go\\)$\")",
-      "Bash(git -C c:/nori/Cat5Dev remote -v)"
+      "Bash(git -C c:/nori/Cat5Dev remote -v)",
+      "Bash(Get-ChildItem -Path \"c:\\\\nori\\\\Cat5Dev\" -Recurse -Force)",
+      "Bash(Select-Object -First 100)",
+      "Bash(Format-List FullName)"
     ]
   }
 }

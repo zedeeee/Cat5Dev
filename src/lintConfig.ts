@@ -216,6 +216,36 @@ export function readFormatterOptions(workspaceRoot: string): FormatterOptions {
     };
 }
 
+export function gitignoreTemplate(): string {
+    return `# OS
+Thumbs.db
+
+# Editor
+.vscode/
+
+# Logs
+*.log
+logs/
+
+# Cache / temp
+.cache/
+tmp/
+temp/
+
+# Archives
+*.zip
+*.tar
+*.gz
+
+# Generated files
+*.tmp
+*.bak
+
+# CATIA Extension
+cat5dev.toml
+`;
+}
+
 /** cat5dev.toml の雛形テキストを返す。値は DEFAULT_*_OPTIONS から生成する */
 export function tomlTemplate(): string {
     const l = DEFAULT_LINT_OPTIONS;
