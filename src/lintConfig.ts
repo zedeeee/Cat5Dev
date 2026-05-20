@@ -240,6 +240,9 @@ temp/
 # Generated files
 *.tmp
 *.bak
+
+# Claude Code
+.claude/
 `;
 }
 
