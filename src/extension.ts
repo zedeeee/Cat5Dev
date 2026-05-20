@@ -162,7 +162,9 @@ export function activate(context: vscode.ExtensionContext) {
         const tomlPath = path.join(rootPath, 'cat5dev.toml');
 
         const overwriteBtn = t('init.overwrite');
+        let existingTargetProject = '';
         if (fs.existsSync(tomlPath)) {
+            existingTargetProject = readProjectSettings(rootPath).targetProject;
             const answer = await vscode.window.showWarningMessage(
                 t('init.tomlExists'),
                 { modal: true },
@@ -175,6 +177,9 @@ export function activate(context: vscode.ExtensionContext) {
 
         const currentLang = getLanguage();
         fs.writeFileSync(tomlPath, tomlTemplate(currentLang), 'utf-8');
+        if (existingTargetProject) {
+            writeTomlProjectKey(rootPath, 'target_project', existingTargetProject);
+        }
 
         const gitignorePath = path.join(rootPath, '.gitignore');
         if (fs.existsSync(gitignorePath)) {
