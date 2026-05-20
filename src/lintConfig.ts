@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { Language } from './i18n';
 
 export interface LintOptions {
     option_explicit: boolean;
@@ -283,88 +284,146 @@ export function writeTomlProjectKey(workspaceRoot: string, key: string, value: s
     fs.writeFileSync(tomlPath, result.join('\n'), 'utf-8');
 }
 
+const tomlComments = {
+    ja: {
+        header: '# Cat5Dev 設定ファイル',
+        targetProject: '# 対象の CATIA VBA プロジェクト名',
+        language: '# 言語設定 (ja / en)',
+        optionExplicit: '# Option Explicit が宣言されていない場合に警告',
+        onErrorResumeNext: '# On Error Resume Next の使用時に警告',
+        goto: '# GoTo の使用時に警告 (On Error GoTo は除外)',
+        maxLineLength: '# 指定の文字数を超える行がある場合に警告 (0 = 無効)',
+        unusedVariables: '# Dim で宣言された変数が使用されていない場合に警告',
+        maxNestingDepth: '# ネスト深さが閾値を超えた場合に警告 (0 = 無効)',
+        maxFunctionLines: '# Sub/Function の行数が閾値を超えた場合に警告 (0 = 無効)',
+        unmatchedParens: '# 括弧の不一致をエラーとして報告',
+        unmatchedBlocks: '# End If / End Sub / End Function 等の欠落をエラーとして報告',
+        formatterEnabled: '# フォーマッターの有効/無効',
+        indentSize: '# インデントのスペース数',
+        capitalizeKeywords: '# VBA キーワードを大文字化 (If, Dim, Sub 等)',
+        fixIndentation: '# インデントの修正',
+        trimTrailingSpace: '# 行末の空白を削除',
+        ensureContinuationSpace: '# 継続文字 (_) の前にスペースを入れる',
+        indentContinuationLines: '# 継続行を1レベルインデント',
+        maxBlankLines: '# 連続する空白行の最大数 (0 = 無効)',
+        normalizeOperatorSpacing: '# 演算子 (=, +, - 等) 周囲のスペースを正規化',
+        normalizeCommaSpacing: '# カンマ後のスペースを正規化',
+        normalizeCommentSpace: '# コメント文字 (\') の後にスペースを入れる',
+        expandTypeSuffixes: '# 型サフィックスの短縮形を展開 (% → Integer, $ → String 等)',
+        formatOnSave: '# 保存時に自動フォーマット',
+    },
+    en: {
+        header: '# Cat5Dev configuration file',
+        targetProject: '# Target CATIA VBA project name',
+        language: '# Language (ja / en)',
+        optionExplicit: '# Warn when Option Explicit is not declared',
+        onErrorResumeNext: '# Warn on usage of On Error Resume Next',
+        goto: '# Warn on GoTo usage (On Error GoTo is excluded)',
+        maxLineLength: '# Warn when a line exceeds the specified character count (0 = disabled)',
+        unusedVariables: '# Warn when a variable is declared with Dim but never used',
+        maxNestingDepth: '# Warn when nesting depth exceeds the threshold (0 = disabled)',
+        maxFunctionLines: '# Warn when a Sub/Function exceeds the line count threshold (0 = disabled)',
+        unmatchedParens: '# Report mismatched parentheses as an error',
+        unmatchedBlocks: '# Report missing End If / End Sub / End Function etc. as an error',
+        formatterEnabled: '# Enable or disable the formatter entirely',
+        indentSize: '# Number of spaces per indentation level',
+        capitalizeKeywords: '# Capitalize VBA keywords (If, Dim, Sub, etc.)',
+        fixIndentation: '# Fix incorrect indentation',
+        trimTrailingSpace: '# Remove trailing whitespace from each line',
+        ensureContinuationSpace: '# Ensure a space before line continuation character (_)',
+        indentContinuationLines: '# Indent continuation lines by one level',
+        maxBlankLines: '# Maximum number of consecutive blank lines (0 = disabled)',
+        normalizeOperatorSpacing: '# Normalize spacing around operators (=, +, -, etc.)',
+        normalizeCommaSpacing: '# Normalize spacing after commas',
+        normalizeCommentSpace: '# Ensure a space after comment character (\')',
+        expandTypeSuffixes: '# Expand type suffix shorthand (% → Integer, $ → String, etc.)',
+        formatOnSave: '# Automatically format on save',
+    },
+};
+
 /** cat5dev.toml の雛形テキストを返す。値は DEFAULT_*_OPTIONS から生成する */
-export function tomlTemplate(): string {
+export function tomlTemplate(lang: Language = 'ja'): string {
     const l = DEFAULT_LINT_OPTIONS;
     const f = DEFAULT_FORMATTER_OPTIONS;
-    return `# Cat5Dev configuration file
+    const c = tomlComments[lang];
+    return `${c.header}
 
 [project]
-# Target CATIA VBA project name
+${c.targetProject}
 target_project = ""
 
-# Language (ja / en)
-language = "ja"
+${c.language}
+language = "${lang}"
 
 [lint]
 enabled = false
 
 [lint.rules]
-# Warn when Option Explicit is not declared
+${c.optionExplicit}
 option_explicit = ${l.option_explicit}
 
-# Warn on usage of On Error Resume Next
+${c.onErrorResumeNext}
 on_error_resume_next = ${l.on_error_resume_next}
 
-# Warn on GoTo usage (On Error GoTo is excluded)
+${c.goto}
 goto = ${l.goto}
 
-# Warn when a line exceeds the specified character count (0 = disabled)
+${c.maxLineLength}
 max_line_length = ${l.max_line_length}
 
-# Warn when a variable is declared with Dim but never used
+${c.unusedVariables}
 unused_variables = ${l.unused_variables}
 
-# Warn when nesting depth exceeds the threshold (0 = disabled)
+${c.maxNestingDepth}
 max_nesting_depth = ${l.max_nesting_depth}
 
-# Warn when a Sub/Function exceeds the line count threshold (0 = disabled)
+${c.maxFunctionLines}
 max_function_lines = ${l.max_function_lines}
 
-# Report mismatched parentheses as an error
+${c.unmatchedParens}
 unmatched_parens = ${l.unmatched_parens}
 
-# Report missing End If / End Sub / End Function etc. as an error
+${c.unmatchedBlocks}
 unmatched_blocks = ${l.unmatched_blocks}
 
 [formatter]
-# Enable or disable the formatter entirely
+${c.formatterEnabled}
 enabled = false
 
-# Number of spaces per indentation level
+${c.indentSize}
 indent_size = ${f.indent_size}
 
-# Capitalize VBA keywords (If, Dim, Sub, etc.)
+${c.capitalizeKeywords}
 capitalize_keywords = ${f.capitalize_keywords}
 
-# Fix incorrect indentation
+${c.fixIndentation}
 fix_indentation = ${f.fix_indentation}
 
-# Remove trailing whitespace from each line
+${c.trimTrailingSpace}
 trim_trailing_space = ${f.trim_trailing_space}
 
-# Ensure a space before line continuation character (_)
+${c.ensureContinuationSpace}
 ensure_continuation_space = ${f.ensure_continuation_space}
 
-# Indent continuation lines by one level
+${c.indentContinuationLines}
 indent_continuation_lines = ${f.indent_continuation_lines}
 
-# Maximum number of consecutive blank lines (0 = disabled)
+${c.maxBlankLines}
 max_blank_lines = ${f.max_blank_lines}
 
-# Normalize spacing around operators (=, +, -, etc.)
+${c.normalizeOperatorSpacing}
 normalize_operator_spacing = ${f.normalize_operator_spacing}
 
-# Normalize spacing after commas
+${c.normalizeCommaSpacing}
 normalize_comma_spacing = ${f.normalize_comma_spacing}
 
-# Ensure a space after comment character (')
+${c.normalizeCommentSpace}
 normalize_comment_space = ${f.normalize_comment_space}
 
-# Expand type suffix shorthand (% → Integer, $ → String, etc.)
+${c.expandTypeSuffixes}
 expand_type_suffixes = ${f.expand_type_suffixes}
 
-# Automatically format on save
+${c.formatOnSave}
 format_on_save = ${f.format_on_save}
 `;
 }

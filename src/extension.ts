@@ -54,14 +54,14 @@ export function activate(context: vscode.ExtensionContext) {
         const currentLang = getLanguage();
         const selected = await vscode.window.showQuickPick(
             [
-                { label: t('language.japanese'), description: 'Current language', value: 'ja' },
-                { label: t('language.english'), description: 'Current language', value: 'en' }
+                { label: t('language.japanese'), description: t('language.description'), value: 'ja' },
+                { label: t('language.english'), description: t('language.description'), value: 'en' }
             ],
             { placeHolder: t('language.title') }
         );
         if (selected && selected.value !== currentLang) {
             setLanguage(selected.value as 'ja' | 'en');
-            vscode.window.showInformationMessage('Please reload VSCode to apply language changes.');
+            vscode.window.showInformationMessage(t('language.reload'));
         }
     });
 
@@ -82,12 +82,13 @@ export function activate(context: vscode.ExtensionContext) {
     let deleteFileCmd = vscode.commands.registerCommand('cat5dev.deleteFile', async (fileUri: vscode.Uri) => {
         const filePath = fileUri.fsPath;
         const fileName = path.basename(filePath);
+        const deleteBtn = t('file.deleteButton');
         const confirmed = await vscode.window.showWarningMessage(
-            `Delete ${fileName}?`,
+            t('file.deleteConfirm', fileName),
             { modal: true },
-            'Delete'
+            deleteBtn
         );
-        if (confirmed === 'Delete') {
+        if (confirmed === deleteBtn) {
             fs.unlinkSync(filePath);
             vscode.commands.executeCommand('cat5dev.refreshTree');
         }
@@ -96,7 +97,7 @@ export function activate(context: vscode.ExtensionContext) {
     let copyPathCmd = vscode.commands.registerCommand('cat5dev.copyPath', async (fileUri: vscode.Uri) => {
         const filePath = fileUri.fsPath;
         await vscode.env.clipboard.writeText(filePath);
-        vscode.window.showInformationMessage(`Path copied: ${filePath}`);
+        vscode.window.showInformationMessage(t('file.copySuccess', filePath));
     });
 
     const VBA_SELECTOR = ['bas_utf', 'cls_utf', 'frm_utf'].map(l => ({ language: 'vb', pattern: `**/*.${l}` }));
@@ -160,27 +161,29 @@ export function activate(context: vscode.ExtensionContext) {
         const rootPath = workspaceFolders[0].uri.fsPath;
         const tomlPath = path.join(rootPath, 'cat5dev.toml');
 
+        const overwriteBtn = t('init.overwrite');
         if (fs.existsSync(tomlPath)) {
             const answer = await vscode.window.showWarningMessage(
-                'cat5dev.toml は既に存在します。上書きしますか？',
+                t('init.tomlExists'),
                 { modal: true },
-                '上書き'
+                overwriteBtn
             );
-            if (answer !== '上書き') {
+            if (answer !== overwriteBtn) {
                 return;
             }
         }
 
-        fs.writeFileSync(tomlPath, tomlTemplate(), 'utf-8');
+        const currentLang = getLanguage();
+        fs.writeFileSync(tomlPath, tomlTemplate(currentLang), 'utf-8');
 
         const gitignorePath = path.join(rootPath, '.gitignore');
         if (fs.existsSync(gitignorePath)) {
             const ans = await vscode.window.showWarningMessage(
-                '.gitignore は既に存在します。上書きしますか？',
+                t('init.gitignoreExists'),
                 { modal: true },
-                '上書き'
+                overwriteBtn
             );
-            if (ans === '上書き') {
+            if (ans === overwriteBtn) {
                 fs.writeFileSync(gitignorePath, gitignoreTemplate(), 'utf-8');
             }
         } else {
@@ -189,7 +192,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         const doc = await vscode.workspace.openTextDocument(tomlPath);
         await vscode.window.showTextDocument(doc);
-        vscode.window.showInformationMessage('cat5dev.toml を作成しました');
+        vscode.window.showInformationMessage(t('init.success'));
     });
 
     context.subscriptions.push(pullCmd, pushCmd, selectCmd, switchLanguageCmd, renameFileCmd, deleteFileCmd, copyPathCmd, initCmd);

@@ -81,6 +81,19 @@ export const messages = {
         'file.rename': '名前変更',
         'file.delete': '削除',
         'file.copy': 'パスをコピー',
+        'file.deleteConfirm': '{0} を削除しますか？',
+        'file.deleteButton': '削除',
+        'file.copySuccess': 'パスをコピーしました: {0}',
+
+        // Language switch
+        'language.description': '(現在の言語)',
+        'language.reload': '言語変更を反映するにはVSCodeを再読み込みしてください。',
+
+        // Init command
+        'init.tomlExists': 'cat5dev.toml は既に存在します。上書きしますか？',
+        'init.overwrite': '上書き',
+        'init.gitignoreExists': '.gitignore は既に存在します。上書きしますか？',
+        'init.success': 'cat5dev.toml を作成しました。',
     },
     en: {
         // Sidebar & TreeView
@@ -143,6 +156,19 @@ export const messages = {
         'file.rename': 'Rename',
         'file.delete': 'Delete',
         'file.copy': 'Copy Path',
+        'file.deleteConfirm': 'Delete {0}?',
+        'file.deleteButton': 'Delete',
+        'file.copySuccess': 'Path copied: {0}',
+
+        // Language switch
+        'language.description': '(Current language)',
+        'language.reload': 'Please reload VSCode to apply language changes.',
+
+        // Init command
+        'init.tomlExists': 'cat5dev.toml already exists. Overwrite?',
+        'init.overwrite': 'Overwrite',
+        'init.gitignoreExists': '.gitignore already exists. Overwrite?',
+        'init.success': 'cat5dev.toml has been created.',
     }
 };
 
