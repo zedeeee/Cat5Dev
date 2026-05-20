@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { t } from './i18n';
+import { readProjectSettings } from './lintConfig';
 
 export class CatiaTreeNode extends vscode.TreeItem {
     constructor(
@@ -84,14 +85,7 @@ export class CatiaVbaTreeProvider implements vscode.TreeDataProvider<CatiaTreeNo
         if (!workspaceFolders) return [];
         const rootPath = workspaceFolders[0].uri.fsPath;
 
-        const settingsPath = path.join(rootPath, '.vscode', 'settings.json');
-        let targetProject = '';
-        if (fs.existsSync(settingsPath)) {
-            try {
-                const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-                if (settings.targetProject) { targetProject = settings.targetProject; }
-            } catch (e) { }
-        }
+        const { targetProject } = readProjectSettings(rootPath);
 
         if (!targetProject) { return []; }
 

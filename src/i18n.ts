@@ -1,47 +1,22 @@
 import * as vscode from 'vscode';
+import { readProjectSettings, writeTomlProjectKey } from './lintConfig';
 
 export type Language = 'ja' | 'en';
 
 export function getLanguage(): Language {
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) return 'ja';
+    if (!workspaceFolders) { return 'ja'; }
 
-    const settingsPath = require('path').join(workspaceFolders[0].uri.fsPath, '.vscode', 'settings.json');
-    if (require('fs').existsSync(settingsPath)) {
-        try {
-            const settings = JSON.parse(require('fs').readFileSync(settingsPath, 'utf-8'));
-            const lang = settings.language;
-            if (lang === 'ja' || lang === 'en') {
-                return lang;
-            }
-        } catch (e) { }
-    }
+    const { language } = readProjectSettings(workspaceFolders[0].uri.fsPath);
+    if (language === 'ja' || language === 'en') { return language; }
     return 'ja';
 }
 
 export function setLanguage(lang: Language): void {
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) return;
+    if (!workspaceFolders) { return; }
 
-    const path = require('path');
-    const fs = require('fs');
-    const rootPath = workspaceFolders[0].uri.fsPath;
-    const vscodePath = path.join(rootPath, '.vscode');
-    const settingsPath = path.join(vscodePath, 'settings.json');
-
-    if (!fs.existsSync(vscodePath)) {
-        fs.mkdirSync(vscodePath, { recursive: true });
-    }
-
-    let settings: any = {};
-    if (fs.existsSync(settingsPath)) {
-        try {
-            settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-        } catch (e) { }
-    }
-
-    settings.language = lang;
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 4), 'utf-8');
+    writeTomlProjectKey(workspaceFolders[0].uri.fsPath, 'language', lang);
 }
 
 export const messages = {

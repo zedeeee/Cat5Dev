@@ -240,10 +240,44 @@ temp/
 # Generated files
 *.tmp
 *.bak
-
-# CATIA Extension
-cat5dev.toml
 `;
+}
+
+/** cat5dev.toml の [project] セクションから設定を読み込む */
+export function readProjectSettings(workspaceRoot: string): { targetProject: string; language: string } {
+    const tomlPath = path.join(workspaceRoot, 'cat5dev.toml');
+    if (!fs.existsSync(tomlPath)) { return { targetProject: '', language: 'ja' }; }
+
+    let content: string;
+    try { content = fs.readFileSync(tomlPath, 'utf-8'); } catch { return { targetProject: '', language: 'ja' }; }
+
+    const proj = parseToml(content)['project'] ?? {};
+    const targetProject = (proj['target_project'] ?? '').replace(/^"|"$/g, '');
+    const language = (proj['language'] ?? 'ja').replace(/^"|"$/g, '');
+    return { targetProject, language };
+}
+
+/** cat5dev.toml の [project] セクションの指定キーの値を書き換える（コメント・他行を保持） */
+export function writeTomlProjectKey(workspaceRoot: string, key: string, value: string): void {
+    const tomlPath = path.join(workspaceRoot, 'cat5dev.toml');
+    if (!fs.existsSync(tomlPath)) { return; }
+
+    const lines = fs.readFileSync(tomlPath, 'utf-8').split(/\r?\n/);
+    let inProject = false;
+    let written = false;
+    const result = lines.map(line => {
+        const secMatch = line.trim().match(/^\[([^\]]+)\]$/);
+        if (secMatch) { inProject = secMatch[1].trim() === 'project'; }
+        if (inProject && !written) {
+            const eqIdx = line.indexOf('=');
+            if (eqIdx >= 0 && line.substring(0, eqIdx).trim() === key) {
+                written = true;
+                return `${key} = "${value}"`;
+            }
+        }
+        return line;
+    });
+    fs.writeFileSync(tomlPath, result.join('\n'), 'utf-8');
 }
 
 /** cat5dev.toml の雛形テキストを返す。値は DEFAULT_*_OPTIONS から生成する */
@@ -251,6 +285,13 @@ export function tomlTemplate(): string {
     const l = DEFAULT_LINT_OPTIONS;
     const f = DEFAULT_FORMATTER_OPTIONS;
     return `# Cat5Dev configuration file
+
+[project]
+# Target CATIA VBA project name
+target_project = ""
+
+# Language (ja / en)
+language = "ja"
 
 [lint]
 enabled = false

@@ -10,7 +10,7 @@ import { VbaDocumentFormatter, registerFormatOnSave, formatVbaDocument } from '.
 import { VbaServer } from './vbaServer';
 import { t, getLanguage, setLanguage } from './i18n';
 import { registerLinter } from './linter';
-import { tomlTemplate, gitignoreTemplate } from './lintConfig';
+import { tomlTemplate, gitignoreTemplate, readProjectSettings, writeTomlProjectKey } from './lintConfig';
 import { startLspClient } from './lspClient';
 
 const outputChannel = vscode.window.createOutputChannel('CATIA VBA Sync');
@@ -121,11 +121,11 @@ export function activate(context: vscode.ExtensionContext) {
         if (e.visible) treeProvider.refresh();
     });
 
-    // Auto-refresh tree when .vscode/settings.json changes (e.g. after selectProject)
+    // Auto-refresh tree when cat5dev.toml changes (e.g. after selectProject)
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders) {
         const configWatcher = vscode.workspace.createFileSystemWatcher(
-            new vscode.RelativePattern(workspaceFolders[0], '.vscode/settings.json')
+            new vscode.RelativePattern(workspaceFolders[0], 'cat5dev.toml')
         );
         configWatcher.onDidChange(() => treeProvider.refresh());
         configWatcher.onDidCreate(() => treeProvider.refresh());
@@ -198,15 +198,8 @@ export function activate(context: vscode.ExtensionContext) {
 export function deactivate() { }
 
 async function getTargetProject(context: vscode.ExtensionContext, rootPath: string): Promise<string | undefined> {
-    const settingsPath = path.join(rootPath, '.vscode', 'settings.json');
-    if (fs.existsSync(settingsPath)) {
-        try {
-            const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-            if (settings.targetProject) {
-                return settings.targetProject;
-            }
-        } catch (e) { }
-    }
+    const { targetProject } = readProjectSettings(rootPath);
+    if (targetProject) { return targetProject; }
 
     // Auto-prompt if empty
     return await executeSelectProject(context, rootPath) as string | undefined;
@@ -328,22 +321,7 @@ ag_sys.ExecuteScript "${tempDir}", 1, "c5d_list.catvbs", "CATMain", ag_args
             });
 
             if (selected) {
-                const vscodePath = path.join(rootPath!, '.vscode');
-                const settingsPath = path.join(vscodePath, 'settings.json');
-
-                if (!fs.existsSync(vscodePath)) {
-                    fs.mkdirSync(vscodePath, { recursive: true });
-                }
-
-                let settings: any = {};
-                if (fs.existsSync(settingsPath)) {
-                    try {
-                        settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-                    } catch (e) { }
-                }
-
-                settings.targetProject = selected;
-                fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 4), 'utf-8');
+                writeTomlProjectKey(rootPath!, 'target_project', selected);
                 vscode.window.showInformationMessage(t('info.projectSelected', selected));
             }
             resolve(selected);
